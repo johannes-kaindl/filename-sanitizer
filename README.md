@@ -6,7 +6,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](LICENSE-DOCS)
-![Platform](https://img.shields.io/badge/platform-Obsidian%201.11.4%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
+![Platform](https://img.shields.io/badge/platform-Obsidian%201.15.1%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
 
 LLMs, scripts and other tools create files whose names contain characters that Obsidian Sync on a phone refuses (`: ? * " < > | # ^ [ ]`), or that break links. Filename Sanitizer renames such files by fixed, adjustable rules, lets links follow, logs every change with everything that helps you find the writer, and stays out of your way. It never overwrites and never deletes a file.
 
@@ -24,7 +24,7 @@ LLMs, scripts and other tools create files whose names contain characters that O
 
 ## Requirements
 
-- **Obsidian 1.11.4+**, desktop and mobile. On phones and tablets the plugin does not rename by default (switch *This device repairs*), so two devices never race for the same file; settings, log and API work everywhere.
+- **Obsidian 1.15.1+**, desktop and mobile. On phones and tablets the plugin does not rename by default (switch *This device repairs*), so two devices never race for the same file; settings, log and API work everywhere.
 - **Automatic renaming needs the Obsidian setting *Files and links → Automatically update internal links* on.** Otherwise Obsidian opens a dialog for every file that has backlinks and all further renames wait behind it. With the setting off the plugin renames nothing on its own and fills the review list. It never changes that setting.
 - The plugin makes no network requests.
 

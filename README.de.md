@@ -6,7 +6,7 @@
 
 [![Lizenz: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Doku: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](LICENSE-DOCS)
-![Plattform](https://img.shields.io/badge/platform-Obsidian%201.11.4%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
+![Plattform](https://img.shields.io/badge/platform-Obsidian%201.15.1%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
 
 LLMs, Skripte und andere Werkzeuge legen Dateien an, deren Namen Zeichen enthalten, die Obsidian Sync am Handy ablehnt (`: ? * " < > | # ^ [ ]`) oder die Links brechen. Filename Sanitizer benennt solche Dateien nach festen, einstellbaren Regeln um, lässt die Links mitgehen, protokolliert jede Änderung mit allem, was beim Finden des Schreibers hilft, und bleibt dir aus dem Weg. Er überschreibt nie und löscht nie eine Datei.
 
@@ -24,7 +24,7 @@ LLMs, Skripte und andere Werkzeuge legen Dateien an, deren Namen Zeichen enthalt
 
 ## Voraussetzungen
 
-- **Obsidian 1.11.4+**, Desktop und Mobil. Auf Handy und Tablet benennt das Plugin vorab nicht um (Schalter *Dieses Gerät repariert*), damit zwei Geräte nicht um dieselbe Datei wetteifern; Einstellungen, Protokoll und API laufen überall.
+- **Obsidian 1.15.1+**, Desktop und Mobil. Auf Handy und Tablet benennt das Plugin vorab nicht um (Schalter *Dieses Gerät repariert*), damit zwei Geräte nicht um dieselbe Datei wetteifern; Einstellungen, Protokoll und API laufen überall.
 - **Das automatische Umbenennen braucht die Obsidian-Einstellung *Dateien und Links → Interne Links automatisch aktualisieren* eingeschaltet.** Sonst öffnet Obsidian für jede Datei mit Backlinks einen Dialog, und alle weiteren Umbenennungen warten dahinter. Ist die Einstellung aus, benennt das Plugin nicht von selbst um und füllt die Prüfliste. Es ändert diese Einstellung nie.
 - Das Plugin stellt keine Netzwerkanfragen.
 
