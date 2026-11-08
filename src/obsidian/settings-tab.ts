@@ -101,10 +101,6 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   setDeviceRepairs(on: boolean): void { this.plugin.device.setRepairs(on); }
   setDeviceName(name: string): void { this.plugin.device.setName(name); }
 
-  display(): void {
-    this.renderImperative();
-  }
-
   private renderImperative(): void {
     this.cleanupPrevious();
     this.containerEl.empty();
