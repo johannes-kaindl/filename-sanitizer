@@ -4,7 +4,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Profil:** `ts-node` · `obsidian-plugin`.
 
-**Stand 2026-11-08: im Bau (0.1.0, nicht released).** Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14). Task 3 (Gerüst) steht; Tasks 4 bis 12 folgen.
+**Stand 2026-11-08: gebaut (0.1.0, nicht released, nicht getaggt).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke am Fixture (`docs/SMOKE.md`). Offen für den Erst-Release: Sync-Messungen S1 bis S4 und S6 mit Johannes (Cockpit-Task), Release und Store durch den Master. Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
 
 ## Project character
 
@@ -18,9 +18,32 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Vendoring statt Dependency.** Geteilte Bausteine liegen als Snapshot unter `src/vendor/kit/` (pure) und `src/vendor/kit-obsidian/`, je mit Herkunfts-Header und `VENDOR.json`. Nie von Hand editieren — Re-Vendoring über `sh tools/sync-kit.sh` (Pins in `tools/kit-sync.json`).
 
+```
+src/core/constants.ts       feste Grenzen (Ruhezeit, Wiederholungsschutz, Frist) und LINK_SAFE_EXTENSIONS
+src/core/settings.ts        SanitizerSettings, loadSettings (Feldreparatur), trySetPolicy
+src/core/queue.ts           createQuietQueue (Ruhezeit je Pfad, injizierte Timer)
+src/core/repeat-guard.ts    createRepeatGuard (3 Reparaturen je Quellpfad in 10 Minuten)
+src/core/decide.ts          decide (none | exception | rename | identical | review), isException, orderForRepair, initialSnapshot
+src/core/scan.ts            scanDecisions (alle Funde in Reparaturreihenfolge)
+src/core/log-entry.ts       Protokollzeilen (Schema 1), logFileName, expiredLogFiles, summarizeBurst
+src/core/api.ts             createApi (Plugin-API v1, synchron, Fehler als Werte)
+src/core/review-view.ts     ViewModel der Prüfliste (reviewItems, applyGate, nameDiff)
+src/core/log-view.ts        ViewModel des Protokolls (logRows, logFilterOptions)
+src/core/exceptions.ts      exceptionLine („Immer so lassen“)
+src/obsidian/engine.ts      RepairEngine: Ereignisse, Ruhezeit, Neuprüfung, eine Umbenennung zur Zeit mit Frist, Alias, Protokoll
+src/obsidian/device.ts      geräteeigene Werte im lokalen Speicher (repairs, name, snapshot)
+src/obsidian/log-store.ts   .jsonl je Gerät und Monat im Vault
+src/obsidian/view.ts        eine Ansicht mit Tabs Prüfen und Protokoll (Kit-Hub)
+src/obsidian/settings-tab.ts  deklarativer Tab, Hilfe-Zeile zuerst, drei eingeklappte Gruppen
+src/main.ts                 onload: Einstellungen, Gerät, Protokoll, API, Motor, Ansicht, Befehle
+scripts/gui-smoke.ts        CDP-Treiber (Zweitinstanz), docs/SMOKE.md
+fixtures/vault/             Fixture für den GUI-Smoke
+```
+
 ## Commands
 
 - `npm run gate` — lint + typecheck + typecheck:test + typecheck:scripts + test + check:pure + build; Pflicht vor jedem Commit.
+- `npm run smoke:gui -- --setup` baut den Staging-Vault, `npm run smoke:gui -- --port <Port> [--shots <Ordner>]` fährt den Smoke gegen die Zweitinstanz (Rezept im Dateikopf von `scripts/gui-smoke.ts`).
 - `sh tools/sync-kit.sh [--check]` — Kit-Vendoring aus `../obsidian-kit` und `../../libs/code-kit`.
 - `node ../tools/css_baseline/check.mjs styles.css` — CSS-Baseline (sobald es `styles.css` gibt).
 - `python3 ../tools/bibliothek/gate.py --repo filename-sanitizer --liste` — Bibliothek-Gate, Ziel 0 open.
@@ -40,6 +63,10 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 - **Ein Name mit `\` ist für Obsidian unsichtbar** (nicht im Index, kein Ereignis); das Plugin kann ihn nicht reparieren.
 - **Geräteeigene Werte** (Schalter „Dieses Gerät repariert“, Gerätename, Schnappschuss des Altbestands) liegen nur in `app.loadLocalStorage`/`saveLocalStorage`, nie in `data.json`, weil diese mitsynchronisiert wird.
 - **Typname im Kit:** `FilenameHit` (nicht `Hit`); der API-Fehlertyp im Kit-Barrel heißt `FilenameSanitizerApiError`; `maxBytes` ist gültig bei 0 oder 32 bis 255; ein leerer Name aus dem Plugin löst den Rückfall in `safeFileName` aus.
+
+- **Ein Desktop-Fenster mit 390 px ist kein Handy.** Die Seitenleisten behalten ihre Breite und lassen der Ansicht 22 px (Smoke-Messung 1, 2026-11-08); der Treiber klappt sie vor der 390-px-Messung ein.
+- **Ein Popup-Schub endet erst 2 Sekunden nach der letzten Reparatur** (`BURST_MS` in `engine.ts`): ein Test, der Popups zählt, wartet die vorige Reparatur ab, sonst zählt sie mit.
+- **Der Mock aus dem Kit kennt `Notice.messageEl` und `Setting.infoEl` nicht** (nur `noticeEl`, `descEl`); die Tests setzen `messageEl` selbst, der Code nutzt `descEl`.
 
 ## Memory
 

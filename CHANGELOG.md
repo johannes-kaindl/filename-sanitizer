@@ -8,4 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Project scaffold: build, lint, test and vendored kit modules (`filename-policy` 0.62.0, `obsidian-kit` 0.82.0).
+- Automatic repair of file names that Obsidian Sync or links reject, after a quiet time, folders before their contents, one rename at a time, links following through Obsidian's file manager.
+- Collision rules: identical content leaves the file as a marked duplicate, different content gets a number, nothing is overwritten or deleted.
+- Review list with *Automatic* and *Review first* modes, per-entry *Always keep*, and protection of names that existed before the first start on a device.
+- Protection against writers that re-create the same invalid path (three repairs in ten minutes, then the review list and a notice).
+- Log as one `.jsonl` file per device and month, with origin, effect, environment and chosen front matter fields, and a log view with filters.
+- Plugin API v1 (`sanitizeName`, `checkName`) for writing plugins, with the fallback `safeFileName` in `obsidian-kit`.
+- Settings tab with replacements per character, exceptions in `.gitignore` style, log options and advanced values; device values stay on the device.
+- English and German texts, documentation in both languages.
