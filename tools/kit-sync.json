@@ -54,7 +54,9 @@
         "collapsible",
         "confirm",
         "plugin-api",
-        "safe-file-name"
+        "safe-file-name",
+        "settings_walker",
+        "folder-suggest"
       ],
       "rewrite": [
         [

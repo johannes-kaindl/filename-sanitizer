@@ -2,5 +2,5 @@
   "source": "obsidian-kit",
   "version": "0.82.0",
   "sha": "0c820ad",
-  "vendored": "hub.ts, review-list.ts, redline.ts, help-setting.ts, collapsible.ts, confirm.ts, plugin-api.ts, safe-file-name.ts"
+  "vendored": "hub.ts, review-list.ts, redline.ts, help-setting.ts, collapsible.ts, confirm.ts, plugin-api.ts, safe-file-name.ts, settings_walker.ts, folder-suggest.ts"
 }

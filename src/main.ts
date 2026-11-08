@@ -8,6 +8,7 @@ import { tn } from "./i18n/strings";
 import type { FilenameSanitizerApi } from "./vendor/kit/filename-sanitizer-source";
 import { createDeviceState } from "./obsidian/device";
 import { RepairEngine } from "./obsidian/engine";
+import { FilenameSanitizerSettingTab } from "./obsidian/settings-tab";
 import { createLogStore } from "./obsidian/log-store";
 import { SanitizerView, VIEW_TYPE_SANITIZER, type SanitizerTab } from "./obsidian/view";
 
@@ -71,6 +72,7 @@ export default class FilenameSanitizerPlugin extends Plugin {
         this.notice(n === 0 ? t("cmd.checkDone.none") : tn("cmd.checkDone.some", n), false);
       },
     });
+    this.addSettingTab(new FilenameSanitizerSettingTab(this.app, this));
     this.engine.start();
     void this.logStore.rotate(Date.now());
   }

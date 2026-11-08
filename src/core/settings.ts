@@ -95,3 +95,20 @@ export function loadSettings(raw: unknown): SanitizerSettings {
     logContentChars: natural(r.logContentChars, d.logContentChars),
   };
 }
+
+export type PolicyField = ReplaceableRule | "extraReplacement" | "maxBytes" | "extraChars";
+
+/** Setzt ein Richtlinien-Feld, wenn die Richtlinie danach gültig bleibt; sonst nennt es die Zeichen, die sie ablehnt. */
+export function trySetPolicy(policy: FilenamePolicy, field: PolicyField, value: string | number): { ok: true; policy: FilenamePolicy } | { ok: false; badChars: string } {
+  const replacements = { ...policy.replacements } as Record<ReplaceableRule, string>;
+  let { maxBytes, extraChars, extraReplacement } = policy;
+  if (field === "maxBytes") maxBytes = typeof value === "number" ? value : Number.NaN;
+  else if (field === "extraChars") extraChars = String(value);
+  else if (field === "extraReplacement") extraReplacement = String(value);
+  else replacements[field] = String(value);
+  const next: FilenamePolicy = { replacements, extraChars, extraReplacement, maxBytes };
+  const problems = validatePolicy(next);
+  if (problems.length === 0) return { ok: true, policy: next };
+  const own = problems.find((p) => p.field === field) ?? problems[0];
+  return { ok: false, badChars: own.badChars };
+}
