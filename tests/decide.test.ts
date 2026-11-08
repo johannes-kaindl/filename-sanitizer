@@ -24,7 +24,7 @@ describe("decide", () => {
   it("review mode queues", () => { expect(run({ settings: loadSettings({ mode: "review" }) })).toMatchObject({ kind: "review", reason: "mode" }); });
   it("link setting off queues", () => { expect(run({ linkAuto: false, trigger: "create" })).toMatchObject({ kind: "review", reason: "link-setting" }); });
   it("list trigger with link setting off still queues", () => { expect(run({ linkAuto: false, trigger: "list" })).toMatchObject({ kind: "review", reason: "link-setting" }); });
-  it("unknown extension queues", () => { expect(run({ path: "a?.foo", linkAuto: true })).toMatchObject({ kind: "review", reason: "unknown-type" }); });
+  it("unknown extension renames like any other", () => { expect(run({ path: "a?.foo", linkAuto: true })).toMatchObject({ kind: "rename", target: "a.foo" }); });
   it("folder is not affected by extension rule", () => { expect(run({ path: "Ord:ner.foo", isFolder: true })).toMatchObject({ kind: "rename", target: "Ord-ner.foo" }); });
   it("snapshot entry is legacy, also at start", () => {
     expect(run({ inSnapshot: true, trigger: "start" })).toMatchObject({ kind: "review", reason: "legacy" });

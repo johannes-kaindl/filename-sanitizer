@@ -34,8 +34,9 @@ const BULK_BAD = 245;
 const PUNKTE = [
   "0 Plugin geladen (Restricted-Mode-Guard)",
   "A Altbestand beim ersten Start unberührt und in der Prüfliste",
-  "B Extern angelegtes „c1: rest.md“ wird nach der Ruhezeit „c1 — rest.md“, Link und Alias folgen, Kontrolldatei bleibt",
+  "B Extern angelegtes „c1: rest.md“ wird nach der Ruhezeit „c1 — rest.md“, Link und Alias folgen, Kontrolldatei bleibt; eine Datei mit beliebiger Endung („c2: fremd.foo“) wird ebenso repariert",
   "C Ausnahme-Ordner bleibt, derselbe Name außerhalb wird repariert",
+  "R Regeländerung macht einen Bestandsnamen ungültig: er bleibt liegen und steht in der Prüfliste, eine danach angelegte Datei wird repariert",
   "D alwaysUpdateLinks aus: kein Dialog, Datei bleibt, Prüfliste nennt den Grund; danach löst die Liste aus",
   "E Mehrere Reparaturen ergeben ein gebündeltes Popup",
   "F Das Protokoll (.jsonl) enthält die Zeile, die Kontrolldatei nicht",
@@ -102,9 +103,9 @@ async function main(): Promise<void> {
 
     // Ausgangslage: Plugin aus, Gerätewerte weg (= erster Start), Altbestand und Einstellungen von außen.
     console.log("0 · Grundlage");
-    await cdp.evaluate(`try { await app.plugins.disablePlugin(${q(PLUGIN_ID)}); } catch {} for (const k of ["repairs", "name", "snapshot"]) app.saveLocalStorage("filename-sanitizer-" + k, null); return true;`);
+    await cdp.evaluate(`try { await app.plugins.disablePlugin(${q(PLUGIN_ID)}); } catch {} for (const k of ["repairs", "name", "snapshot", "policy"]) app.saveLocalStorage("filename-sanitizer-" + k, null); return true;`);
     for (const d of ["Filename Sanitizer", "bulk", "bulkbad"]) rmSync(join(vaultDir, d), { recursive: true, force: true });
-    for (const f of readdirSync(vaultDir)) if (/^(c1|d|e\d|h\d|Links2|kontrolle|alt)/.test(f) && f !== "ok.md") rmSync(join(vaultDir, f), { force: true });
+    for (const f of readdirSync(vaultDir)) if (/^(c1|c2|d|e\d|h\d|Links2|kontrolle|alt|r~|r-|r2)/.test(f) && f !== "ok.md") rmSync(join(vaultDir, f), { force: true });
     rmSync(join(vaultDir, "Draussen"), { recursive: true, force: true });
     rmSync(join(vaultDir, "Ausnahme", "x: y.md"), { force: true });
     writeFileSync(join(vaultDir, info.configDir, "plugins", PLUGIN_ID, "data.json"), JSON.stringify({ quietMs: QUIET_MS, exceptions: "Ausnahme/", mode: "auto" }));
@@ -125,16 +126,17 @@ async function main(): Promise<void> {
 
     // --- B ---
     console.log("\nB · Reparatur nach der Ruhezeit");
-    w("c1: rest.md", "# rest\n"); w("kontrolle.md", "# fine\n");
+    w("c1: rest.md", "# rest\n"); w("c2: fremd.foo", "foo\n"); w("kontrolle.md", "# fine\n");
     await sleep(300);
     const stillThere = has("c1: rest.md");
     const done = await wait(() => has("c1 — rest.md") && !has("c1: rest.md"), QUIET_MS + 8000);
+    const fooDone = await wait(() => has("c2 — fremd.foo") && !has("c2: fremd.foo"), QUIET_MS + 8000);
     await sleep(1200);
     const links = readFileSync(join(vaultDir, "Links.md"), "utf8");
     const body = done ? readFileSync(join(vaultDir, "c1 — rest.md"), "utf8") : "";
-    record("B Extern angelegtes „c1: rest.md“ wird nach der Ruhezeit „c1 — rest.md“, Link und Alias folgen, Kontrolldatei bleibt",
-      stillThere && done && links.includes("[[c1 — rest]]") && /aliases:[\s\S]*c1: rest/.test(body) && has("kontrolle.md"),
-      `nach 300 ms noch alt=${stillThere}, umbenannt=${done}, Link=${q(links.split("\n")[2])}, Alias=${/c1: rest/.test(body)}, Kontrolle=${has("kontrolle.md")}`);
+    record("B Extern angelegtes „c1: rest.md“ wird nach der Ruhezeit „c1 — rest.md“, Link und Alias folgen, Kontrolldatei bleibt; eine Datei mit beliebiger Endung („c2: fremd.foo“) wird ebenso repariert",
+      stillThere && done && fooDone && links.includes("[[c1 — rest]]") && /aliases:[\s\S]*c1: rest/.test(body) && has("kontrolle.md"),
+      `nach 300 ms noch alt=${stillThere}, umbenannt=${done}, Link=${q(links.split("\n")[2])}, Alias=${/c1: rest/.test(body)}, Kontrolle=${has("kontrolle.md")}, .foo umbenannt=${fooDone}`);
 
     // --- C ---
     console.log("\nC · Ausnahme");
@@ -142,6 +144,22 @@ async function main(): Promise<void> {
     const outside = await wait(() => has("Draussen/x — y.md"), QUIET_MS + 8000);
     await sleep(1000);
     record("C Ausnahme-Ordner bleibt, derselbe Name außerhalb wird repariert", outside && has("Ausnahme/x: y.md") && !has("Draussen/x: y.md"), `außen=${outside}, Ausnahme blieb=${has("Ausnahme/x: y.md")}`);
+
+    // --- R ---
+    console.log("\nR · Regeländerung");
+    w("r~alt.md", "bestand\n");
+    await sleep(QUIET_MS + 1500);
+    await cdp.evaluate(`${P}.settings.policy = Object.assign({}, ${P}.settings.policy, { extraChars: "~", extraReplacement: "-" }); await ${P}.saveSettings(); return true;`);
+    await sleep(QUIET_MS + 2500);
+    const pr = await pending();
+    const bleibt = has("r~alt.md") && !has("r-alt.md");
+    w("r2~neu.md", "neu\n");
+    const neuDone = await wait(() => has("r2-neu.md") && !has("r2~neu.md"), QUIET_MS + 8000);
+    record("R Regeländerung macht einen Bestandsnamen ungültig: er bleibt liegen und steht in der Prüfliste, eine danach angelegte Datei wird repariert",
+      bleibt && pr.some((e) => e.path === "r~alt.md" && e.reason === "legacy") && neuDone,
+      `Bestand blieb=${bleibt}, Liste=${q(pr)}, neue Datei repariert=${neuDone}`);
+    await cdp.evaluate(`${P}.settings.policy = Object.assign({}, ${P}.settings.policy, { extraChars: "", extraReplacement: "" }); await ${P}.saveSettings(); return true;`);
+    rmSync(join(vaultDir, "r~alt.md"), { force: true });
 
     // --- D ---
     console.log("\nD · Link-Einstellung aus");

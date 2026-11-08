@@ -84,6 +84,7 @@ export default class FilenameSanitizerPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.engine.policyChanged();
   }
 
   async activateView(tab: SanitizerTab): Promise<void> {

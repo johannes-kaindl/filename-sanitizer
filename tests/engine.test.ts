@@ -5,16 +5,18 @@ import { loadSettings, type SanitizerSettings } from "../src/core/settings";
 import { parseLogLine, type LogInput } from "../src/core/log-entry";
 import { fakeClock, flush, makeFakeApp } from "./helpers/fake-app";
 
-function setup(over: { settings?: Record<string, unknown>; snapshot?: string[] | null; repairs?: boolean } = {}) {
+function setup(over: { settings?: Record<string, unknown>; snapshot?: string[] | null; repairs?: boolean; policyKey?: string | null } = {}) {
   const fa = makeFakeApp();
   const clock = fakeClock();
   const settings: SanitizerSettings = loadSettings(over.settings ?? {});
   let snap: Set<string> | null = over.snapshot ? new Set(over.snapshot) : null;
   const saved: string[][] = [];
+  let policyKey: string | null = over.policyKey ?? null;
   const device: DeviceState = {
     repairs: over.repairs ?? true, name: "M5",
     snapshot: () => snap ?? new Set<string>(), hasSnapshot: () => snap !== null,
     saveSnapshot: (p) => { saved.push(p); snap = new Set(p); },
+    policyKey: () => policyKey, savePolicyKey: (k) => { policyKey = k; },
   };
   const lines: string[] = [];
   const log: LogStore = { write: (l) => { lines.push(l); }, read: () => Promise.resolve([]), rotate: () => Promise.resolve() };
@@ -26,7 +28,7 @@ function setup(over: { settings?: Record<string, unknown>; snapshot?: string[] |
   const entries = (): LogInput[] => lines.map((l) => parseLogLine(l)!);
   const boot = async (): Promise<void> => { engine.start(); fa.fireLayoutReady(); await flush(); };
   const renames = (): string[] => fa.calls.filter((c) => c.startsWith("rename"));
-  return { fa, clock, engine, device, lines, entries, bursts, repeats, stalled, saved, boot, renames, settings };
+  return { fa, clock, engine, device, policyKeyNow: () => policyKey, lines, entries, bursts, repeats, stalled, saved, boot, renames, settings };
 }
 
 describe("RepairEngine", () => {
@@ -164,6 +166,51 @@ describe("RepairEngine", () => {
     t.fa.create("a: b.md"); await t.clock.advance(20000);
     expect(t.renames()).toEqual([]);
     expect(t.engine.pending().map((p) => p.reason)).toEqual(["link-setting"]);
+  });
+
+  describe("Regeländerung macht Bestandsnamen ungültig", () => {
+    const withTilde = (t: ReturnType<typeof setup>): void => { t.settings.policy = { ...t.settings.policy, extraChars: "~", extraReplacement: "-" }; };
+
+    it("Start nach geänderter Richtlinie: neu betroffener Bestand geht in die Prüfliste, nicht in die Umbenennung", async () => {
+      const t = setup({ snapshot: [], policyKey: "alt" }); t.fa.addFile("a~b.md");
+      withTilde(t);
+      await t.boot(); await t.clock.advance(20000);
+      expect(t.renames()).toEqual([]);
+      expect(t.engine.pending().map((p) => [p.path, p.reason])).toEqual([["a~b.md", "legacy"]]);
+      expect(t.policyKeyNow()).not.toBe("alt");
+    });
+
+    it("Änderung im Betrieb: der Bestandsname bleibt auch bei einem späteren Ereignis unangetastet", async () => {
+      const t = setup(); t.fa.addFile("a~b.md");
+      await t.boot();
+      withTilde(t);
+      t.engine.policyChanged(); await flush();
+      expect(t.engine.pending().map((p) => [p.path, p.reason])).toEqual([["a~b.md", "legacy"]]);
+      t.fa.modify("a~b.md"); await t.clock.advance(20000);
+      expect(t.renames()).toEqual([]);
+      expect(t.engine.pending().map((p) => [p.path, p.reason])).toEqual([["a~b.md", "legacy"]]);
+    });
+
+    it("Gegenprobe: eine nach der Änderung neu angelegte Datei wird weiter repariert", async () => {
+      const t = setup(); await t.boot();
+      withTilde(t);
+      t.engine.policyChanged();
+      t.fa.create("c~d.md"); await t.clock.advance(20000);
+      expect(t.fa.files.has("c-d.md")).toBe(true);
+    });
+
+    it("unveränderte Richtlinie: Start nimmt nichts zusätzlich in den Schnappschuss", async () => {
+      const t = setup({ snapshot: [] }); t.fa.addFile("a: b.md");
+      await t.boot();
+      expect(t.fa.files.has("a — b.md")).toBe(true);
+    });
+  });
+
+  it("jede Endung wird repariert, wenn alwaysUpdateLinks an ist", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.create("a: b.foo"); await t.clock.advance(20000);
+    expect(t.fa.files.has("a — b.foo")).toBe(true);
+    expect(t.engine.pending()).toEqual([]);
   });
 
   it("first start stores snapshot and renames nothing", async () => {

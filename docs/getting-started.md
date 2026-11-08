@@ -11,7 +11,7 @@ From then on a file that appears with an invalid name is repaired by itself, aft
 - **Automatic** (default): repairs after the quiet time.
 - **Review first**: nothing is renamed on its own; everything waits in the review list.
 
-Both modes use the review list for what the plugin must not do alone: existing names from before the first start, names that keep coming back (three repairs of the same path in ten minutes), files with an extension Obsidian does not know, and all names while *Automatically update internal links* is off in Obsidian.
+Both modes use the review list for what the plugin must not do alone: existing names from before the first start or made invalid by a later change of the rules, names that keep coming back (three repairs of the same path in ten minutes), and all names while *Automatically update internal links* is off in Obsidian.
 
 ## This device repairs
 

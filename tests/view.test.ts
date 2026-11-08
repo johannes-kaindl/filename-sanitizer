@@ -25,7 +25,7 @@ describe("SanitizerView", () => {
     for (const lang of ["en", "de"] as const) {
       setLang(lang);
       for (const k of ["device-off", "link-setting", "stalled", "nothing"]) expect(t(`review.locked.${k}`)).not.toBe(`review.locked.${k}`);
-      for (const k of ["mode", "link-setting", "unknown-type", "legacy", "repeat", "identical", "stalled"]) expect(t(`review.reason.${k}`)).not.toBe(`review.reason.${k}`);
+      for (const k of ["mode", "link-setting", "legacy", "repeat", "identical", "stalled"]) expect(t(`review.reason.${k}`)).not.toBe(`review.reason.${k}`);
       for (const k of ["repariert", "identisch", "kollision", "fehlgeschlagen", "vorgemerkt", "bestätigt", "übersprungen", "wiederholt"]) expect(t(`log.event.${k}`)).not.toBe(`log.event.${k}`);
     }
     setLang("en");

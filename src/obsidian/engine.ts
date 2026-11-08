@@ -18,6 +18,9 @@ export interface DeviceState {
   snapshot: () => Set<string>;
   hasSnapshot: () => boolean;
   saveSnapshot: (paths: string[]) => void;
+  /** Stand der Richtlinie, gegen den der Altbestand zuletzt abgeglichen wurde; `null` vor dem ersten Abgleich. */
+  policyKey: () => string | null;
+  savePolicyKey: (key: string) => void;
 }
 
 export interface LogStore {
@@ -101,6 +104,32 @@ export class RepairEngine {
     return () => { this.listeners.delete(cb); };
   }
 
+  /**
+   * Eine Regeländerung (auch von einem anderen Gerät mitsynchronisiert) macht Bestandsnamen ungültig, die vorher gültig waren:
+   * sie gelten als Altbestand und gehen in die Prüfliste, die Automatik fasst sie nicht an (Entscheidung 2026-11-08).
+   * Ohne gespeicherten Stand (ältere Installation) gibt es nichts zu vergleichen; er wird nur festgehalten.
+   */
+  private absorbPolicyChange(entries: { path: string; isFolder: boolean }[]): boolean {
+    const device = this.deps.device;
+    const key = this.policyKey();
+    const stored = device.policyKey();
+    if (stored === key) return false;
+    if (stored !== null) device.saveSnapshot([...new Set([...device.snapshot(), ...initialSnapshot(entries, this.deps.settings().policy)])]);
+    device.savePolicyKey(key);
+    return true;
+  }
+
+  private policyKey(): string { return JSON.stringify(this.deps.settings().policy); }
+
+  /** Nach dem Speichern der Einstellungen: neu betroffener Bestand wird Altbestand und erscheint in der Prüfliste, bevor ein Ereignis ihn umbenennt. */
+  policyChanged(): void {
+    if (!this.deps.device.hasSnapshot()) return;
+    const entries = this.app.vault.getAllLoadedFiles()
+      .filter((f) => f.path !== "" && f.path !== "/")
+      .map((f) => ({ path: f.path, isFolder: f instanceof TFolder }));
+    if (this.absorbPolicyChange(entries)) void this.scanNow();
+  }
+
   /** Prüft den ganzen Vault; der Start ruft es einmal. */
   async scanNow(): Promise<void> {
     const settings = this.deps.settings();
@@ -108,7 +137,8 @@ export class RepairEngine {
     const entries = this.app.vault.getAllLoadedFiles()
       .filter((f) => f.path !== "" && f.path !== "/")
       .map((f) => ({ path: f.path, isFolder: f instanceof TFolder }));
-    if (!device.hasSnapshot()) device.saveSnapshot(initialSnapshot(entries, settings.policy));
+    if (!device.hasSnapshot()) { device.saveSnapshot(initialSnapshot(entries, settings.policy)); device.savePolicyKey(this.policyKey()); }
+    else this.absorbPolicyChange(entries);
     this.quiet = true;
     this.review.clear();
     const found = scanDecisions(entries, {

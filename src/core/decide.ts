@@ -1,12 +1,11 @@
 import { applyPolicy, checkSegment, numberedName, type FilenameHit, type FilenamePolicy } from "../vendor/kit/filename-policy";
 import { matchIgnore, parsePatterns, type ParsedPatterns } from "../vendor/kit/ignore";
 import { joinVaultPath, vaultDirname } from "../vendor/kit/vault-path";
-import { isLinkSafeExtension } from "./constants";
 import type { SanitizerSettings } from "./settings";
 
 export type Trigger = "create" | "rename" | "modify" | "start" | "list";
 export type TargetState = "free" | "same-content" | "different" | "folder-exists";
-export type ReviewReason = "mode" | "link-setting" | "unknown-type" | "legacy" | "repeat";
+export type ReviewReason = "mode" | "link-setting" | "legacy" | "repeat";
 export type Decision =
   | { kind: "none" }
   | { kind: "exception" }
@@ -41,11 +40,6 @@ function lastSegment(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
-function extensionOf(name: string): string {
-  const i = name.lastIndexOf(".");
-  return i <= 0 ? "" : name.slice(i + 1);
-}
-
 export function decide(input: {
   path: string; isFolder: boolean; settings: SanitizerSettings; linkAuto: boolean; inSnapshot: boolean;
   repeatBlocked: boolean; trigger: Trigger; targetState: (target: string) => TargetState;
@@ -63,7 +57,6 @@ export function decide(input: {
   if (settings.mode === "review" && !manual) return review("mode");
   if (input.repeatBlocked && !manual) return review("repeat");
   if (!input.linkAuto) return review("link-setting");
-  if (!manual && !isFolder && !isLinkSafeExtension(extensionOf(name))) return review("unknown-type");
 
   const fixed = applyPolicy(name, settings.policy, kind).name;
   for (let n = 1; n <= MAX_NUMBER; n++) {

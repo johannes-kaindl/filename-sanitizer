@@ -4,10 +4,9 @@
 
 Open **Open review and log**. The reason is shown on its card:
 
-- *Existing name*: it was there before the plugin's first start on this device. Tick it and press **Rename ticked**.
+- *Existing name*: it was there before the plugin's first start on this device, or it became invalid only when you changed the rules (replacements, extra characters). The plugin repairs only files that are new or renamed, so tick it and press **Rename ticked**.
 - *Waiting for your OK*: the mode is *Review first*.
 - *Link update is off*: Obsidian's setting *Files and links → Automatically update internal links* is off. Turn it on, then press **Rename ticked**. The plugin never changes that setting. With it off Obsidian asks a question for every renamed file that has backlinks and holds back the next rename until you answer; measured with Obsidian 1.15.1.
-- *Unknown file type*: the extension is not one Obsidian knows (only known extensions are renamed automatically). You can rename it from the list.
 - *Keeps coming back*: the same path was repaired three times within ten minutes; the writer creates it again after each repair. Fix the writer (the log shows `caller` for API calls and the origin of the file); the plugin stops so no endless numbered copies appear.
 - *Duplicate*: a file with the corrected name and identical content already exists. The plugin never deletes; remove the extra copy yourself.
 - *Paused*: a rename did not finish within 10 seconds, probably because a dialog was open. The automatic run stays paused until you restart Obsidian.

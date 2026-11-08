@@ -17,7 +17,7 @@ LLMs, Skripte und andere Werkzeuge legen Dateien an, deren Namen Zeichen enthalt
 - **Links gehen mit** — das Plugin benennt mit Obsidians eigenem Dateimanager um, daher werden Links auf die Datei angepasst. Der alte Name bleibt als Alias in der Notiz (abschaltbar).
 - **Nie eine Kollision** — existiert der Zielname mit gleichem Inhalt, bleibt die Datei liegen und wird als Dublette markiert; bei anderem Inhalt wird eine Nummer angehängt (`a — b 2.md`). Ein Ordner wird nie zusammengeführt.
 - **Prüfliste** — je Vault wählst du zwischen *Automatisch* und *Erst bestätigen*. In *Erst bestätigen* und für alles, was das Plugin nicht von selbst tun darf, zeigt eine Liste mit altem und neuem Namen, was sich ändern würde; du hakst an, ab oder sagst *Immer so lassen*.
-- **Vorhandene Namen bleiben unberührt** — beim ersten Start auf einem Gerät wird nichts umbenannt. Bestehende Namen erscheinen in der Prüfliste; nur Namen, die später entstehen, werden automatisch repariert.
+- **Vorhandene Namen bleiben unberührt** — beim ersten Start auf einem Gerät wird nichts umbenannt. Bestehende Namen erscheinen in der Prüfliste; nur Namen, die später entstehen, werden automatisch repariert. Das gilt auch, wenn erst eine Regeländerung einen vorhandenen Namen ungültig macht: er kommt in die Prüfliste.
 - **Protokoll** — eine `.jsonl`-Datei je Gerät und Monat in einem Ordner deines Vaults, mit Herkunft, Wirkung, Umgebung und gewählten Frontmatter-Feldern; der Anfang des Notiztextes ist optional und vorab aus. Die Ansicht zeigt es neueste zuerst, filterbar nach Gerät, Ordner und Ereignis.
 - **Plugin-API für Schreiber** — `app.plugins.plugins["filename-sanitizer"].api` bietet `sanitizeName` und `checkName` (synchron). Plugins, die Dateien schreiben, fragen sie zuerst und fallen ohne sie auf dieselben Standardregeln zurück, über `safeFileName` in `obsidian-kit`.
 - **Ein Popup je Schub** — ein Klick öffnet das Protokoll. Abschaltbar.
@@ -39,7 +39,7 @@ Noch nicht veröffentlicht. Danach installierst du es aus den Release-Dateien: K
 ## Grenzen
 
 - Ein Name mit Rückwärts-Schrägstrich (`\`) ist für Obsidian unsichtbar (nicht im Index, kein Ereignis); das Plugin kann ihn nicht reparieren.
-- Nur Endungen, die Obsidian kennt, werden automatisch umbenannt; andere Dateien kommen in die Prüfliste.
+- Dateien jeder Endung werden automatisch umbenannt, solange in Obsidian „Interne Links automatisch aktualisieren“ an ist.
 - Ob Obsidian Sync jedes Zeichen der Standardtabelle auf jedem Gerät annimmt, wie genau ein Rennen zweier Desktops ausgeht und ob Sync die Protokolldatei mitnimmt, lässt sich nur an einem echten Konto messen; siehe [Fehlersuche](docs/troubleshooting.md).
 
 ## Lizenz

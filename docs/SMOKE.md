@@ -8,8 +8,9 @@ Runs with `npm run smoke:gui -- --port <port>` against a second Obsidian instanc
 |---|---|---|
 | 0 | Plugin loaded, restricted mode of a fresh profile lifted | `app.plugins.plugins["filename-sanitizer"]` exists |
 | A | First start: an existing name (`alt: bestand.md`) stays untouched and is listed with reason *legacy* | device values reset, plugin enabled, file and `engine.pending()` read |
-| B | `c1: rest.md` created from outside stays for 300 ms, then becomes `c1 — rest.md`; the link in `Links.md` follows and the old name is an alias; the control file `kontrolle.md` stays | files read from disk |
+| B | `c1: rest.md` created from outside stays for 300 ms, then becomes `c1 — rest.md`; the link in `Links.md` follows and the old name is an alias; the control file `kontrolle.md` stays; `c2: fremd.foo` (any extension) is repaired the same way | files read from disk |
 | C | `Ausnahme/x: y.md` stays (exception), `Draussen/x: y.md` is repaired | exception pattern `Ausnahme/` |
+| R | Rule change: `r~alt.md` is valid, then `~` becomes an extra character; the name stays and the review list names it with reason *legacy*; `r2~neu.md` created afterwards becomes `r2-neu.md` | settings saved through the plugin, files read from disk, `engine.pending()` |
 | D | `alwaysUpdateLinks` off: no "Update links" dialog, the file stays, the review list names the reason; after switching it on, the list renames and the link in `Links2.md` follows | `app.vault.setConfig` |
 | E | Three repairs in a row give one notice ("Renamed 3 files …") | notice text read after a quiet period |
 | F | The log file holds the line of `c1: rest.md` (event, schema 1), every line parses, the control file has none | `.jsonl` read from disk |

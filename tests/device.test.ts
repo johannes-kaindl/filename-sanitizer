@@ -27,6 +27,10 @@ describe("device state", () => {
     d.setName("  Büro "); expect(d.name).toBe("Büro");
     d.setName(""); expect(createDeviceState(f.app, () => 0.25).name).toBe("Desktop-4000");
   });
+  it("policy key is stored locally and starts empty", () => {
+    const f = fakeApp(); const d = createDeviceState(f.app);
+    expect(d.policyKey()).toBeNull(); d.savePolicyKey("{}"); expect(d.policyKey()).toBe("{}"); expect(f.store.get("filename-sanitizer-policy")).toBe("{}");
+  });
   it("snapshot roundtrips and distinguishes none from empty", () => {
     const f = fakeApp(); const d = createDeviceState(f.app);
     expect(d.hasSnapshot()).toBe(false);

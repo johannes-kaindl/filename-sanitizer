@@ -5,6 +5,7 @@ import type { DeviceState } from "./engine";
 export const KEY_REPAIRS = "filename-sanitizer-repairs";
 export const KEY_NAME = "filename-sanitizer-name";
 export const KEY_SNAPSHOT = "filename-sanitizer-snapshot";
+export const KEY_POLICY = "filename-sanitizer-policy";
 
 /** Geräteeigene Werte: nur im lokalen Speicher von Obsidian, nie in `data.json` (sie wird mitsynchronisiert). */
 export function createDeviceState(app: App, random: () => number = Math.random): DeviceState & { setRepairs(on: boolean): void; setName(name: string): void } {
@@ -29,6 +30,8 @@ export function createDeviceState(app: App, random: () => number = Math.random):
     },
     hasSnapshot: () => Array.isArray(read(KEY_SNAPSHOT)),
     saveSnapshot: (paths) => { write(KEY_SNAPSHOT, paths); },
+    policyKey: () => { const v = read(KEY_POLICY); return typeof v === "string" ? v : null; },
+    savePolicyKey: (key) => { write(KEY_POLICY, key); },
     setRepairs: (on) => { write(KEY_REPAIRS, on); },
     setName: (name) => { write(KEY_NAME, name.trim() === "" ? null : name.trim()); },
   };

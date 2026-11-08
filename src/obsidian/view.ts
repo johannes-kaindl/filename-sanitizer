@@ -15,7 +15,7 @@ export type SanitizerTab = "review" | "log";
 
 const LOG_LIMIT = 500;
 /** Gründe, die der Motor als `message` einer Zeile „vorgemerkt“ schreibt. */
-const REASON_KEYS = ["mode", "link-setting", "unknown-type", "legacy", "repeat"];
+const REASON_KEYS = ["mode", "link-setting", "legacy", "repeat"];
 
 function reviewStrings(): ReviewListStrings {
   return {

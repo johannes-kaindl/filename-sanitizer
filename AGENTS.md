@@ -19,7 +19,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 **Vendoring statt Dependency.** Geteilte Bausteine liegen als Snapshot unter `src/vendor/kit/` (pure) und `src/vendor/kit-obsidian/`, je mit Herkunfts-Header und `VENDOR.json`. Nie von Hand editieren — Re-Vendoring über `sh tools/sync-kit.sh` (Pins in `tools/kit-sync.json`).
 
 ```
-src/core/constants.ts       feste Grenzen (Ruhezeit, Wiederholungsschutz, Frist) und LINK_SAFE_EXTENSIONS
+src/core/constants.ts       feste Grenzen (Ruhezeit, Wiederholungsschutz, Frist)
 src/core/settings.ts        SanitizerSettings, loadSettings (Feldreparatur), trySetPolicy
 src/core/queue.ts           createQuietQueue (Ruhezeit je Pfad, injizierte Timer)
 src/core/repeat-guard.ts    createRepeatGuard (3 Reparaturen je Quellpfad in 10 Minuten)
@@ -59,9 +59,10 @@ fixtures/vault/             Fixture für den GUI-Smoke
 
 ## Gotchas
 
-- **Bei `alwaysUpdateLinks` aus öffnet `renameFile` je Datei einen Dialog „Update links“, und alle weiteren Aufrufe warten dahinter** (gemessen 2026-11-08, Obsidian 1.15.1). Darum läuft die Automatik nur bei `app.vault.getConfig("alwaysUpdateLinks") === true`, nur für Endungen aus `LINK_SAFE_EXTENSIONS`, strikt nacheinander und mit Frist von 10000 ms; nach einer abgelaufenen Frist hält sie bis zum nächsten Start an.
+- **Bei `alwaysUpdateLinks` aus öffnet `renameFile` je Datei einen Dialog „Update links“, und alle weiteren Aufrufe warten dahinter** (gemessen 2026-11-08, Obsidian 1.15.1). Darum läuft die Automatik nur bei `app.vault.getConfig("alwaysUpdateLinks") === true`, für jede Endung (S5: die Endung ändert am Dialog nichts; gemessen nur an 1.15.1, `minAppVersion` 1.11.4 ungemessen), strikt nacheinander und mit Frist von 10000 ms; nach einer abgelaufenen Frist hält sie bis zum nächsten Start an.
+- **Eine Regeländerung macht Bestand zu Altbestand:** `RepairEngine.policyChanged()` (aus `saveSettings`) und der Start nehmen neu ungültige Namen in den Schnappschuss auf, sobald sich `JSON.stringify(settings.policy)` vom gespeicherten Stand unterscheidet; die Automatik fasst nur neue oder umbenannte Dateien an (Entscheidung 2026-11-08).
 - **Ein Name mit `\` ist für Obsidian unsichtbar** (nicht im Index, kein Ereignis); das Plugin kann ihn nicht reparieren.
-- **Geräteeigene Werte** (Schalter „Dieses Gerät repariert“, Gerätename, Schnappschuss des Altbestands) liegen nur in `app.loadLocalStorage`/`saveLocalStorage`, nie in `data.json`, weil diese mitsynchronisiert wird.
+- **Geräteeigene Werte** (Schalter „Dieses Gerät repariert“, Gerätename, Schnappschuss des Altbestands, Stand der Richtlinie) liegen nur in `app.loadLocalStorage`/`saveLocalStorage`, nie in `data.json`, weil diese mitsynchronisiert wird.
 - **Typname im Kit:** `FilenameHit` (nicht `Hit`); der API-Fehlertyp im Kit-Barrel heißt `FilenameSanitizerApiError`; `maxBytes` ist gültig bei 0 oder 32 bis 255; ein leerer Name aus dem Plugin löst den Rückfall in `safeFileName` aus.
 
 - **Ein Desktop-Fenster mit 390 px ist kein Handy.** Die Seitenleisten behalten ihre Breite und lassen der Ansicht 22 px (Smoke-Messung 1, 2026-11-08); der Treiber klappt sie vor der 390-px-Messung ein.

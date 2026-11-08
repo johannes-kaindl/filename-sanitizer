@@ -17,7 +17,7 @@ LLMs, scripts and other tools create files whose names contain characters that O
 - **Links go with the file** — the plugin renames with Obsidian's own file manager, so links to the file are updated. The old name is kept as an alias in the note (switchable).
 - **Never a collision** — if the target name exists with identical content, the file stays and is marked as a duplicate; with different content a number is appended (`a — b 2.md`). A folder is never merged.
 - **Review list** — choose per vault between *Automatic* and *Review first*. In *Review first*, and for everything the plugin must not do on its own, a list with old and new name shows what would change; you tick, untick or say *Always keep*.
-- **Existing names stay untouched** — at the first start on a device nothing is renamed. Names that already exist appear in the review list; only names that appear later are repaired automatically.
+- **Existing names stay untouched** — at the first start on a device nothing is renamed. Names that already exist appear in the review list; only names that appear later are repaired automatically. The same holds when a change of the rules makes an existing name invalid: it goes to the review list.
 - **Log** — one `.jsonl` file per device and month in a folder of your vault, with origin, effect, environment and chosen front matter fields; the start of the note text is optional and off by default. The view shows it newest first, filterable by device, folder and event.
 - **Plugin API for writers** — `app.plugins.plugins["filename-sanitizer"].api` offers `sanitizeName` and `checkName` (synchronous). Plugins that write files ask it first and fall back to the same default rules without it, through `safeFileName` in `obsidian-kit`.
 - **One notice per batch** — a click opens the log. It can be switched off.
@@ -39,7 +39,7 @@ Open **Review and log** from the command palette (**Open review and log**) to se
 ## Limits
 
 - A name containing a backslash (`\`) is invisible to Obsidian (not in its index, no event); the plugin cannot repair it.
-- Only extensions Obsidian knows are renamed automatically; other files go to the review list.
+- Files of every extension are renamed automatically, as long as *Automatically update internal links* is on in Obsidian.
 - Whether Obsidian Sync accepts every character of the default table on every device, the exact behaviour of a race between two desktops and whether Sync carries the log file are measured on a real account only; see [troubleshooting](docs/troubleshooting.md).
 
 ## License
