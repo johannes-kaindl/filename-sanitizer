@@ -1,22 +1,16 @@
 import { TFile, TFolder } from "obsidian";
 import type { App, EventRef, TAbstractFile } from "obsidian";
 import { RENAME_DEADLINE_MS, REPEAT_LIMIT, REPEAT_WINDOW_MS } from "../core/constants";
-import { decide, initialSnapshot, orderForRepair, targetFor, type Decision, type ReviewReason, type TargetState, type Trigger } from "../core/decide";
+import { decide, initialSnapshot, orderForRepair, targetFor, type Decision, type TargetState, type Trigger } from "../core/decide";
 import { toLogLine, summarizeBurst, type LogEvent, type LogInput } from "../core/log-entry";
 import { createQuietQueue, type Timers } from "../core/queue";
 import { createRepeatGuard } from "../core/repeat-guard";
+import type { ReviewEntry } from "../core/review-entry";
 import { scanDecisions } from "../core/scan";
 import type { SanitizerSettings } from "../core/settings";
 import { applyPolicy, checkSegment, type FilenameHit } from "../vendor/kit/filename-policy";
 
-export interface ReviewEntry {
-  path: string;
-  isFolder: boolean;
-  target: string;
-  /** `stalled`: die Automatik hält an, weil eine Umbenennung die Frist überschritt. */
-  reason: ReviewReason | "identical" | "stalled";
-  hits: FilenameHit[];
-}
+export type { ReviewEntry };
 
 export interface DeviceState {
   repairs: boolean;

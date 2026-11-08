@@ -4,10 +4,12 @@ import { createApi } from "./core/api";
 import { toLogLine } from "./core/log-entry";
 import { loadSettings, type SanitizerSettings } from "./core/settings";
 import { pickLang, setLang, t } from "./vendor/kit/i18n";
+import { tn } from "./i18n/strings";
 import type { FilenameSanitizerApi } from "./vendor/kit/filename-sanitizer-source";
 import { createDeviceState } from "./obsidian/device";
 import { RepairEngine } from "./obsidian/engine";
 import { createLogStore } from "./obsidian/log-store";
+import { SanitizerView, VIEW_TYPE_SANITIZER, type SanitizerTab } from "./obsidian/view";
 
 function safeGetLanguage(): string | null {
   try { return getLanguage(); } catch { return null; }
@@ -30,7 +32,7 @@ export default class FilenameSanitizerPlugin extends Plugin {
   device!: ReturnType<typeof createDeviceState>;
   /** Wird von der Ansicht gesetzt (Task 10); bis dahin tut ein Klick auf das Popup nichts. */
   openLog: (() => void) | null = null;
-  private logStore!: ReturnType<typeof createLogStore>;
+  logStore!: ReturnType<typeof createLogStore>;
 
   async onload(): Promise<void> {
     setLang(pickLang(safeGetLanguage()));
@@ -58,6 +60,17 @@ export default class FilenameSanitizerPlugin extends Plugin {
       notifyRepeat: (path) => { this.notice(t("notice.repeat", path), false); },
       notifyStalled: (path) => { this.notice(t("notice.stalled", path), false); },
     });
+    this.openLog = () => { void this.activateView("log"); };
+    this.registerView(VIEW_TYPE_SANITIZER, (leaf) => new SanitizerView(leaf, this));
+    this.addCommand({ id: "open-review-and-log", name: t("cmd.open"), icon: "list-checks", callback: () => { void this.activateView("review"); } });
+    this.addCommand({
+      id: "check-file-names", name: t("cmd.check"), icon: "scan-search",
+      callback: async () => {
+        await this.engine.scanNow();
+        const n = this.engine.pending().length;
+        this.notice(n === 0 ? t("cmd.checkDone.none") : tn("cmd.checkDone.some", n), false);
+      },
+    });
     this.engine.start();
     void this.logStore.rotate(Date.now());
   }
@@ -68,6 +81,17 @@ export default class FilenameSanitizerPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  async activateView(tab: SanitizerTab): Promise<void> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(VIEW_TYPE_SANITIZER)[0];
+    if (!leaf) {
+      leaf = workspace.getLeaf("tab");
+      await leaf.setViewState({ type: VIEW_TYPE_SANITIZER, active: true });
+    }
+    await workspace.revealLeaf(leaf);
+    if (leaf.view instanceof SanitizerView) leaf.view.showTab(tab);
   }
 
   /** Ein Popup; mit `openOnClick` öffnet ein Klick das Protokoll. */
