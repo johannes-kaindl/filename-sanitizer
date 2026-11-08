@@ -1,0 +1,9 @@
+{
+  "source": "code-kit",
+  "version": "0.62.0",
+  "sha": "24803ec",
+  "vendored": "filename-policy.ts, ignore.ts, rotation.ts, settings.ts, i18n.ts",
+  "obsidian_kit_version": "0.82.0",
+  "obsidian_kit_sha": "0c820ad",
+  "obsidian_kit_vendored": "vault-path.ts, filename-sanitizer-source.ts"
+}
