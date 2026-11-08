@@ -60,6 +60,7 @@ export default class FilenameSanitizerPlugin extends Plugin {
       },
       notifyRepeat: (path) => { this.notice(t("notice.repeat", path), false); },
       notifyStalled: (path) => { this.notice(t("notice.stalled", path), false); },
+      notifyLinkSetting: () => { this.notice(t("notice.linkSetting"), false); },
     });
     this.openLog = () => { void this.activateView("log"); };
     this.registerView(VIEW_TYPE_SANITIZER, (leaf) => new SanitizerView(leaf, this));

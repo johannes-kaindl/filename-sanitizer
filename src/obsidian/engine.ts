@@ -33,6 +33,8 @@ export interface EngineDeps {
   notify: (burst: ReturnType<typeof summarizeBurst>) => void;
   notifyRepeat: (path: string) => void;
   notifyStalled?: (path: string) => void;
+  /** Einmal je Sitzung, wenn die Automatik wegen `alwaysUpdateLinks` aus ruht. */
+  notifyLinkSetting?: () => void;
   environment?: () => { pluginVersion: string; obsidianVersion: string; platform: string };
   timers: Timers;
   now: () => number;
@@ -40,6 +42,9 @@ export interface EngineDeps {
 
 /** Zeit ohne weitere Reparatur, nach der das gebündelte Popup erscheint. */
 const BURST_MS = 2000;
+/** Größere Dateien werden für den Dublettenvergleich nicht gelesen (Speicher, Mobilgeräte); sie gelten als verschieden und bekommen eine Nummer. */
+const MAX_COMPARE_BYTES = 50_000_000;
+const fold = (s: string): string => s.normalize("NFC").toLowerCase();
 const lastSegment = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 const stemOf = (name: string): string => { const i = name.lastIndexOf("."); return i > 0 ? name.slice(0, i) : name; };
 const messageOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -60,6 +65,8 @@ export class RepairEngine {
   private chain: Promise<void> = Promise.resolve();
   private burstTimer: unknown = null;
   private halted = false;
+  private quiet = false;
+  private linkNoted = false;
   private stopped = true;
   private burst: { oldName: string; newName: string }[] = [];
 
@@ -102,6 +109,7 @@ export class RepairEngine {
       .filter((f) => f.path !== "" && f.path !== "/")
       .map((f) => ({ path: f.path, isFolder: f instanceof TFolder }));
     if (!device.hasSnapshot()) device.saveSnapshot(initialSnapshot(entries, settings.policy));
+    this.quiet = true;
     this.review.clear();
     const found = scanDecisions(entries, {
       settings, linkAuto: this.linkAuto(), snapshot: device.snapshot(), trigger: "start",
@@ -114,6 +122,7 @@ export class RepairEngine {
         else this.setReview(entry.path, entry.isFolder, "mode", decision.kind === "rename" ? decision.hits : []);
       }
     }
+    this.quiet = false;
     this.emit();
     await this.chain;
   }
@@ -154,7 +163,7 @@ export class RepairEngine {
   }
 
   private onEvent(file: TAbstractFile, trigger: Trigger): void {
-    if (!this.deps.device.repairs || !this.queue) return;
+    if (!this.queue) return;
     const isFolder = file instanceof TFolder;
     if (!isFolder && !(file instanceof TFile)) return;
     if (this.isOwn(file.path)) return;
@@ -166,8 +175,24 @@ export class RepairEngine {
   private onRename(file: TAbstractFile, oldPath: string): void {
     this.queue?.forget(oldPath);
     this.triggers.delete(oldPath);
+    const isFolder = file instanceof TFolder;
+    const kept = this.review.get(oldPath);
     this.dropReview(oldPath);
+    this.moveInSnapshot(oldPath, file.path, isFolder);
+    // Ein Eintrag der Prüfliste (auch der Kinder eines umbenannten Ordners) zieht mit; ohne Fund am neuen Pfad ist er erledigt.
+    if (kept && this.hasFinding(file.path, isFolder)) this.setReview(file.path, isFolder, kept.reason, kept.hits);
     this.onEvent(file, "rename");
+  }
+
+  /** Der Schnappschuss des Altbestands ist nach Pfad geschlüsselt: eine Umbenennung (auch von außen, durch Sync) nimmt den Eintrag mit. */
+  private moveInSnapshot(oldPath: string, newPath: string, isFolder: boolean): void {
+    const device = this.deps.device;
+    if (!device.hasSnapshot()) return;
+    const snap = device.snapshot();
+    if (!snap.has(oldPath)) return;
+    snap.delete(oldPath);
+    if (this.hasFinding(newPath, isFolder)) snap.add(newPath);
+    device.saveSnapshot([...snap]);
   }
 
   private onDelete(file: TAbstractFile): void {
@@ -207,7 +232,8 @@ export class RepairEngine {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) { this.dropReview(path); return; }
     if (!(file instanceof TFile) && !(file instanceof TFolder)) return;
-    await this.repairAncestors(file, trigger);
+    // Aus der Prüfliste kommen die Ordner selbst in `paths` (Ordner zuerst); ein nicht angehakter Elternordner bleibt, wie er ist.
+    if (trigger !== "list") await this.repairAncestors(file, trigger);
     // Der Ordner kann den Pfad verändert haben; ab hier zählt `file.path`.
     const decision = await this.resolve(file, trigger);
     const current = file.path;
@@ -218,6 +244,7 @@ export class RepairEngine {
         this.dropReview(path); this.dropReview(current); return;
       case "review":
         this.setReview(current, isFolder, decision.reason, decision.hits);
+        if (decision.reason === "link-setting" && !this.linkNoted) { this.linkNoted = true; this.deps.notifyLinkSetting?.(); }
         if (decision.reason === "repeat") this.noteRepeat(file, trigger);
         else if (decision.reason !== "legacy") this.logOnce(file, "vorgemerkt", trigger, decision.hits, decision.reason);
         return;
@@ -226,6 +253,7 @@ export class RepairEngine {
         this.logOnce(file, "identisch", trigger, [], undefined, decision.target);
         return;
       case "rename":
+        if (!this.deps.device.repairs && trigger !== "list") { this.setReview(current, isFolder, "mode", decision.hits, decision.target); return; }
         if (this.halted) { this.setReview(current, isFolder, "stalled", decision.hits, decision.target); return; }
         await this.doRename(file, decision, trigger);
     }
@@ -251,7 +279,7 @@ export class RepairEngine {
         path: file.path, isFolder: file instanceof TFolder, settings: this.deps.settings(), linkAuto: this.linkAuto(),
         inSnapshot: this.deps.device.snapshot().has(file.path), repeatBlocked: this.guard.isBlocked(file.path), trigger,
         targetState: (target) => {
-          const other = this.app.vault.getAbstractFileByPath(target);
+          const other = this.lookup(target);
           if (!other) return "free";
           if (other instanceof TFolder) return file instanceof TFolder ? "folder-exists" : "different";
           if (file instanceof TFolder || !(other instanceof TFile)) return "different";
@@ -268,7 +296,7 @@ export class RepairEngine {
   }
 
   private async sameBytes(a: TFile, b: TFile): Promise<boolean> {
-    if (a.stat.size !== b.stat.size) return false;
+    if (a.stat.size !== b.stat.size || a.stat.size > MAX_COMPARE_BYTES) return false;
     try {
       const [x, y] = await Promise.all([this.app.vault.readBinary(a), this.app.vault.readBinary(b)]);
       if (x.byteLength !== y.byteLength) return false;
@@ -276,6 +304,24 @@ export class RepairEngine {
       for (let i = 0; i < u.length; i++) if (u[i] !== v[i]) return false;
       return true;
     } catch { return false; }
+  }
+
+  /** Ziel suchen, wie Dateisysteme es sehen: auch bei anderer Groß-/Kleinschreibung und Unicode-Form im selben Ordner (macOS). */
+  private lookup(path: string): TAbstractFile | null {
+    const exact = this.app.vault.getAbstractFileByPath(path);
+    if (exact) return exact;
+    const i = path.lastIndexOf("/");
+    const dir = i < 0 ? "" : path.slice(0, i);
+    const root = (this.app.vault as unknown as { getRoot?: () => TAbstractFile }).getRoot?.();
+    const parent = dir === "" ? root : this.app.vault.getAbstractFileByPath(dir);
+    if (!(parent instanceof TFolder)) return null;
+    const key = fold(path.slice(i + 1));
+    return parent.children.find((c) => fold(c.name) === key) ?? null;
+  }
+
+  private retry(path: string, trigger: Trigger): void {
+    this.triggers.set(path, trigger);
+    this.queue?.touch(path);
   }
 
   private async renameWithDeadline(file: TFile | TFolder, target: string): Promise<"ok" | "timeout"> {
@@ -295,6 +341,10 @@ export class RepairEngine {
     const content = file instanceof TFile && file.extension === "md" && settings.logFields.content ? await this.readHead(file, settings.logContentChars) : undefined;
     const rules = unique(d.hits.map((h) => h.rule));
 
+    // Neuprüfung direkt vor dem Umbenennen (Spec § 6, Schritt 3): während der Lesezugriffe oben kann die Datei weggezogen sein oder das Ziel entstanden.
+    if (this.app.vault.getAbstractFileByPath(oldPath) !== file) return;
+    if (this.lookup(d.target)) { this.retry(oldPath, trigger); return; }
+
     this.ownTargets.add(d.target);
     if (isFolder) this.ownPrefixes.add(`${d.target}/`);
     let outcome: "ok" | "timeout";
@@ -304,6 +354,12 @@ export class RepairEngine {
       this.ownTargets.delete(d.target); this.ownPrefixes.delete(`${d.target}/`);
       const collision = /already exists/i.test(messageOf(e));
       this.write({ event: collision ? "kollision" : "fehlgeschlagen", oldPath, newPath: d.target, rules, trigger, message: messageOf(e) });
+      // Ein Fehlschlag zählt für den Wiederholungsschutz und kommt, solange er nicht gesperrt ist, mit neuer Entscheidung wieder.
+      this.guard.record(oldPath);
+      if (this.app.vault.getAbstractFileByPath(oldPath) === file) {
+        if (this.guard.isBlocked(oldPath)) { this.setReview(oldPath, isFolder, "repeat", d.hits, d.target); this.noteRepeat(file, trigger); }
+        else this.retry(oldPath, trigger);
+      }
       return;
     }
     if (outcome === "timeout") {
@@ -331,20 +387,23 @@ export class RepairEngine {
     this.burst.push({ oldName: lastSegment(oldPath), newName: lastSegment(d.target) });
     this.scheduleFlush();
     const now = this.deps.now();
+    let environment: ReturnType<NonNullable<EngineDeps["environment"]>> | undefined;
+    try { environment = this.deps.environment?.(); } catch { environment = undefined; }
     this.write({
       event: "repariert", oldPath, newPath: d.target, rules, trigger,
       origin: stat ? { ctime: stat.ctime, mtime: stat.mtime, size: stat.size, secondsToRepair: Math.max(0, Math.round((now - stat.ctime) / 1000)), burstCount: this.burst.length } : undefined,
-      effect: { aliasSet }, environment: this.deps.environment?.(), frontmatter, content, message: aliasError,
+      effect: { aliasSet }, environment, frontmatter, content, message: aliasError,
     });
     if (file instanceof TFolder) this.touchDescendants(file);
   }
 
   /** Der Ordner ist umbenannt; seine Kinder trugen den alten Pfad. Mit falschem Namen kommen sie neu in die Ruhezeit. */
-  private touchDescendants(folder: TFolder): void {
+  private touchDescendants(folder: TFolder, snapshot: ReadonlySet<string> = this.deps.device.snapshot()): void {
     for (const child of folder.children) {
       const isFolder = child instanceof TFolder;
-      if (this.hasFinding(child.path, isFolder)) { this.triggers.set(child.path, "rename"); this.queue?.touch(child.path); }
-      if (child instanceof TFolder) this.touchDescendants(child);
+      // Altbestand und Prüflisten-Einträge ziehen mit dem Ordner um (`onRename`) und bleiben, was sie waren.
+      if (this.hasFinding(child.path, isFolder) && !this.review.has(child.path) && !snapshot.has(child.path)) this.retry(child.path, "rename");
+      if (child instanceof TFolder) this.touchDescendants(child, snapshot);
     }
   }
 
@@ -372,10 +431,12 @@ export class RepairEngine {
   }
 
   private dropReview(path: string): void {
+    this.repeatNoted.delete(path);
     if (this.review.delete(path)) this.emit();
   }
 
   private emit(): void {
+    if (this.quiet) return;
     for (const cb of [...this.listeners]) cb();
   }
 

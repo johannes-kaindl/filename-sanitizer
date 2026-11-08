@@ -41,6 +41,8 @@ export interface FakeApp {
   calls: string[];
   config: { alwaysUpdateLinks: boolean };
   layoutCallbacks: (() => void)[];
+  hooks: { onReadBinary?: (f: TFile) => void };
+  reads: number;
   /** Ersetzt das Umbenennen (Fehler, Hänger). */
   renameImpl: ((file: TFile | TFolder, target: string) => Promise<void>) | null;
   frontmatterImpl: ((file: TFile) => Promise<void>) | null;
@@ -68,7 +70,7 @@ export function makeFakeApp(): FakeApp {
   const emit = (name: string, ...a: unknown[]): void => { for (const h of [...(handlers.get(name) ?? [])]) h(...a); };
 
   const self: FakeApp = {
-    files, content, fm, calls, config, layoutCallbacks, renameImpl: null, frontmatterImpl: null,
+    files, content, fm, calls, config, layoutCallbacks, hooks: {}, reads: 0, renameImpl: null, frontmatterImpl: null,
     app: null as unknown as App,
     addFile(path, text = "x", stat = {}) {
       const f = new MockTFile(path); f.stat = { ctime: 0, mtime: 0, size: text.length, ...stat }; files.set(path, f); content.set(path, text);
@@ -114,7 +116,7 @@ export function makeFakeApp(): FakeApp {
       getAbstractFileByPath: (p: string) => files.get(p) ?? null,
       getAllLoadedFiles: () => [...files.values()],
       getConfig: (k: string) => (k === "alwaysUpdateLinks" ? config.alwaysUpdateLinks : undefined),
-      readBinary: (f: TFile) => Promise.resolve(new TextEncoder().encode(content.get(f.path) ?? "").buffer),
+      readBinary: async (f: TFile) => { self.reads++; self.hooks.onReadBinary?.(f); await Promise.resolve(); return new TextEncoder().encode(content.get(f.path) ?? "").buffer; },
       cachedRead: (f: TFile) => Promise.resolve(content.get(f.path) ?? ""),
     },
     fileManager: {

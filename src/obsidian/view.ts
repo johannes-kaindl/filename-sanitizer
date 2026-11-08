@@ -14,6 +14,8 @@ export const VIEW_TYPE_SANITIZER = "filename-sanitizer-view";
 export type SanitizerTab = "review" | "log";
 
 const LOG_LIMIT = 500;
+/** Gründe, die der Motor als `message` einer Zeile „vorgemerkt“ schreibt. */
+const REASON_KEYS = ["mode", "link-setting", "unknown-type", "legacy", "repeat"];
 
 function reviewStrings(): ReviewListStrings {
   return {
@@ -56,6 +58,15 @@ class ReviewPanel implements HubPanel<"review"> {
     const gate = applyGate(entries, ticks, { deviceRepairs: this.plugin.device.repairs });
     const items = reviewItems(entries, ticks);
 
+    if (entries.length > 0) {
+      const row = c.createDiv({ cls: "fsan-apply" });
+      const count = gate.ok ? gate.paths.length : ticks.size;
+      const btn = row.createEl("button", { cls: "mod-cta", text: count > 0 ? t("review.applyCount", count) : t("review.apply"), attr: { type: "button" } });
+      btn.disabled = !gate.ok;
+      btn.addEventListener("click", () => { if (gate.ok) void this.plugin.engine.applyReview(gate.paths); });
+      if (!gate.ok) row.createDiv({ cls: gate.why === "nothing" ? "fsan-note" : "fsan-warning", text: t(`review.locked.${gate.why}`) });
+    }
+
     buildReviewList(c, {
       items, strings: reviewStrings(),
       onAction: async (action, id) => {
@@ -74,13 +85,6 @@ class ReviewPanel implements HubPanel<"review"> {
     });
 
     if (entries.some((e) => e.reason === "identical")) c.createDiv({ cls: "fsan-note", text: t("review.duplicateHint") });
-    if (entries.length === 0) return;
-    const row = c.createDiv({ cls: "fsan-apply" });
-    const count = gate.ok ? gate.paths.length : ticks.size;
-    const btn = row.createEl("button", { cls: "mod-cta", text: count > 0 ? t("review.applyCount", count) : t("review.apply"), attr: { type: "button" } });
-    btn.disabled = !gate.ok;
-    btn.addEventListener("click", () => { if (gate.ok) void this.plugin.engine.applyReview(gate.paths); });
-    if (!gate.ok) row.createDiv({ cls: gate.why === "nothing" ? "fsan-note" : "fsan-warning", text: t(`review.locked.${gate.why}`) });
   }
 
   /** „Immer so lassen“: der genaue Pfad kommt in die Ausnahmen, der Eintrag verschwindet beim nächsten Scan. */
@@ -152,7 +156,9 @@ class LogPanel implements HubPanel<"log"> {
       head.createSpan({ text: r.device });
       if (r.caller) head.createSpan({ text: t("log.by", r.caller) });
       row.createDiv({ cls: "fsan-log-paths", text: r.newPath ? `${r.oldPath} → ${r.newPath}` : r.oldPath });
-      if (r.message) row.createDiv({ cls: "fsan-log-message", text: r.message });
+      const detail = [r.trigger, ...r.rules].join(" · ");
+      if (detail !== "") row.createDiv({ cls: "fsan-log-message", text: detail });
+      if (r.message) row.createDiv({ cls: "fsan-log-message", text: REASON_KEYS.includes(r.message) ? t(`review.reason.${r.message}`) : r.message });
     }
   }
 

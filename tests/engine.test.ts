@@ -267,3 +267,120 @@ describe("RepairEngine", () => {
     expect(e.frontmatter).toEqual({ agent: "claude" });
   });
 });
+
+describe("Gegenleser-Befunde", () => {
+  it("file moved away while the content is compared is not pulled back", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.addFolder("A"); t.fa.addFolder("B");
+    t.fa.addFile("A/x.md", "same");
+    t.fa.create("A/x?.md", "same");
+    t.fa.hooks.onReadBinary = (f) => { if (f.path === "A/x?.md") t.fa.renameExternal("A/x?.md", "B/x?.md"); };
+    await t.clock.advance(6000);
+    // Kein Umbenennen auf das alte Ziel; die weggezogene Datei wird an ihrem neuen Ort für sich repariert.
+    expect(t.renames()).toEqual(["rename B/x?.md -> B/x.md"]);
+    expect(t.fa.content.get("A/x.md")).toBe("same");
+    expect(t.entries().filter((e) => e.event === "fehlgeschlagen")).toEqual([]);
+  });
+
+  it("target that appears between decision and rename is decided again", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.create("a: b.md", "mine");
+    let first = true;
+    t.fa.renameImpl = (f, target) => {
+      if (first) { first = false; t.fa.addFile("a — b.md", "other"); return Promise.reject(new Error("Destination file already exists!")); }
+      t.fa.renameImpl = null; return Promise.resolve().then(() => { t.fa.files.delete(f.path); f.path = target; t.fa.files.set(target, f); });
+    };
+    await t.clock.advance(6000); await t.clock.advance(6000);
+    expect(t.fa.files.has("a — b 2.md")).toBe(true);
+    expect(t.fa.files.has("a: b.md")).toBe(false);
+    expect(t.entries().map((e) => e.event)).toEqual(["kollision", "repariert"]);
+  });
+
+  it("failures count for the repeat guard and stop the retries", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.renameImpl = () => Promise.reject(new Error("boom"));
+    t.fa.create("a: b.md");
+    for (let i = 0; i < 6; i++) await t.clock.advance(6000);
+    expect(t.renames()).toHaveLength(3);
+    expect(t.engine.pending().map((p) => p.reason)).toEqual(["repeat"]);
+  });
+
+  it("applyReview does not rename an unticked parent folder", async () => {
+    const t = setup(); t.fa.addFolder("A:"); t.fa.addFile("A:/b?.md");
+    await t.boot();
+    await t.engine.applyReview(["A:/b?.md"]);
+    expect(t.fa.files.has("A:")).toBe(true);
+    expect(t.fa.files.has("A:/b.md")).toBe(true);
+    expect(t.engine.pending().map((p) => p.path)).toEqual(["A:"]);
+  });
+
+  it("legacy children move with their folder and stay legacy", async () => {
+    const t = setup(); t.fa.addFolder("X:"); t.fa.addFile("X:/b?.md");
+    await t.boot();
+    await t.engine.applyReview(["X:"]);
+    await t.clock.advance(20000);
+    expect(t.fa.files.has("X-")).toBe(true);
+    expect(t.fa.files.has("X-/b?.md")).toBe(true);
+    expect(t.engine.pending().map((p) => [p.path, p.reason])).toEqual([["X-/b?.md", "legacy"]]);
+    expect(t.renames()).toEqual(["rename X: -> X-"]);
+  });
+
+  it("a folder renamed from outside keeps the snapshot of its legacy children", async () => {
+    const t = setup({ snapshot: ["X:", "X:/b?.md"] }); t.fa.addFolder("X:"); t.fa.addFile("X:/b?.md");
+    await t.boot();
+    t.fa.renameExternal("X:", "X-");
+    await t.clock.advance(20000);
+    expect(t.fa.files.has("X-/b?.md")).toBe(true);
+    expect(t.renames()).toEqual([]);
+  });
+
+  it("device off still fills the review list", async () => {
+    const t = setup({ snapshot: [], repairs: false }); await t.boot();
+    t.fa.create("a: b.md"); await t.clock.advance(20000);
+    expect(t.renames()).toEqual([]);
+    expect(t.engine.pending().map((p) => p.reason)).toEqual(["mode"]);
+  });
+
+  it("the start scan tells listeners once", async () => {
+    const t = setup(); for (let i = 0; i < 5; i++) t.fa.addFile(`a: ${i}.md`);
+    let calls = 0; t.engine.onChange(() => { calls++; });
+    await t.boot();
+    expect(t.engine.pending()).toHaveLength(5); expect(calls).toBe(1);
+  });
+
+  it("a target that differs only in case or unicode form counts as taken", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.addFolder("N"); t.fa.addFile("N/a — B.md", "other");
+    t.fa.create("N/a: b.md", "mine"); await t.clock.advance(6000);
+    expect(t.fa.files.has("N/a — b 2.md")).toBe(true);
+    expect(t.fa.content.get("N/a — B.md")).toBe("other");
+  });
+
+  it("large files are not read for the duplicate check", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.addFile("a — b.md", "x", { size: 60_000_000 });
+    t.fa.create("a: b.md", "x"); (t.fa.files.get("a: b.md") as TFile).stat.size = 60_000_000;
+    await t.clock.advance(6000);
+    expect(t.fa.reads).toBe(0);
+    expect(t.fa.files.has("a — b 2.md")).toBe(true);
+  });
+
+  it("the link-setting popup comes once", async () => {
+    const t = setup({ snapshot: [] });
+    let n = 0; (t.engine as unknown as { deps: { notifyLinkSetting?: () => void } }).deps.notifyLinkSetting = () => { n++; };
+    await t.boot(); t.fa.config.alwaysUpdateLinks = false;
+    t.fa.create("a: 1.md"); t.fa.create("b: 2.md"); await t.clock.advance(8000);
+    expect(n).toBe(1);
+  });
+
+  it("a second repeat case is reported again after the first is cleared", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    for (let i = 0; i < 4; i++) { t.fa.create("a: b.md", `v${i}`); await t.clock.advance(6000); }
+    expect(t.repeats).toHaveLength(1);
+    t.fa.remove("a: b.md"); await flush();
+    expect(t.engine.pending()).toEqual([]);
+    await t.clock.advance(700000);
+    for (let i = 0; i < 4; i++) { t.fa.create("a: b.md", `w${i}`); await t.clock.advance(6000); }
+    expect(t.repeats).toHaveLength(2);
+  });
+});
