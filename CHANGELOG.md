@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-11-09
+
 ### Added
 
 - Automatic repair of file names that Obsidian Sync or links reject, after a quiet time, folders before their contents, one rename at a time, links following through Obsidian's file manager.
