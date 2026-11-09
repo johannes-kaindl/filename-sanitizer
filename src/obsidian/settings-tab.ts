@@ -155,7 +155,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderReplacements(setting: Setting): void {
-    this.section(setting, t("group.replacements"), (body) => {
+    this.section(setting, t("fold.replacements"), (body) => {
       body.createDiv({ cls: "fsan-note", text: t("set.replacementsDesc") });
       for (const rule of RULES) {
         const row = new Setting(body).setName(t(`rule.${rule}`));
@@ -179,7 +179,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderLog(setting: Setting): void {
-    this.section(setting, t("group.log"), (body) => {
+    this.section(setting, t("fold.log"), (body) => {
       const s = this.plugin.settings;
       new Setting(body).setName(t("set.logFolder")).setDesc(t("set.logFolderDesc")).addText((tx) => {
         tx.setValue(s.logFolder);
@@ -210,7 +210,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderAdvanced(setting: Setting): void {
-    this.section(setting, t("group.advanced"), (body) => {
+    this.section(setting, t("fold.advanced"), (body) => {
       this.numberRow(body, "quietMs", t("set.quiet"), t("set.quietDesc"));
       this.policyRow(body, "maxBytes", t("set.maxBytes"), t("set.maxBytesDesc"));
       this.policyRow(body, "extraChars", t("set.extraChars"), t("set.extraCharsDesc"));

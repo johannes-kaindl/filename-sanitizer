@@ -6,6 +6,8 @@ import type FilenameSanitizerPlugin from "../src/main";
 import type { App } from "obsidian";
 import "../src/i18n/strings";
 import { makeFakeEl } from "./vendor/kit/obsidian-mock";
+import { Setting } from "obsidian";
+import { setLang } from "../src/vendor/kit/i18n";
 
 function makeTab(extra: Record<string, unknown> = {}) {
   let saved = 0;
@@ -49,6 +51,22 @@ describe("settings tab", () => {
     expect(defs).toHaveLength(6);
     expect(defs[0].type).not.toBe("group");
     expect(defs.slice(1).map((d) => d.heading)).toEqual(["Repair", "Exceptions", "Replacements", "Log", "Advanced"]);
+  });
+  it("a collapsed group shows its heading once: the fold row carries a different text", () => {
+    for (const lang of ["en", "de"] as const) {
+      setLang(lang);
+      const { tab } = makeTab();
+      const groups = (tab.getSettingDefinitions() as unknown as { type?: string; heading: string; items: { render?: (s: Setting) => void }[] }[]).filter((d) => d.type === "group");
+      for (const g of groups.filter((x) => x.items[0].render && ["Replacements", "Log", "Advanced", "Ersetzungen", "Protokoll", "Erweitert"].includes(x.heading))) {
+        const setting = new Setting(makeFakeEl());
+        g.items[0].render?.(setting);
+        const titles = (setting.settingEl as unknown as { querySelectorAll(s: string): { textContent?: string; text?: string }[] }).querySelectorAll(".okit-collapsible-title").map((e) => e.textContent ?? e.text);
+        expect(titles).toHaveLength(1);
+        expect(titles[0]).toBeTruthy();
+        expect(titles[0]).not.toBe(g.heading);
+      }
+    }
+    setLang("en");
   });
   it("setControlValue stores toggles and saves", async () => {
     const { tab, plugin, saved } = makeTab();

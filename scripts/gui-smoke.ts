@@ -223,18 +223,19 @@ async function main(): Promise<void> {
     await cdp.evaluate(`app.setting.open(); await new Promise((r) => setTimeout(r, 500)); app.setting.openTabById(${q(PLUGIN_ID)}); await new Promise((r) => setTimeout(r, 1000)); return true;`);
     let sCdp: Cdp = cdp; let ownWindow = false;
     if (!(await cdp.evaluate<boolean>(`return Boolean(document.querySelector(".modal.mod-settings"));`))) { const win = await attachTo("settings", port, REPO_NAME); if (win) { sCdp = win; ownWindow = true; } }
-    const s = await sCdp.evaluate<{ first: string | null; heads: string[]; coll: number }>(`
+    const s = await sCdp.evaluate<{ first: string | null; heads: string[]; folds: string[]; coll: number }>(`
       const root = document.querySelector(".modal.mod-settings") || document.body;
       const items = Array.from(root.querySelectorAll(".setting-item"));
       const first = items.length ? (items[0].querySelector(".setting-item-name") || {}).textContent || null : null;
       const heads = Array.from(root.querySelectorAll(".setting-item-heading .setting-item-name")).map((e) => e.textContent);
-      return { first, heads, coll: root.querySelectorAll(".okit-collapsible.is-collapsed").length };
+      const folds = Array.from(root.querySelectorAll(".okit-collapsible-title")).map((e) => e.textContent);
+      return { first, heads, folds, coll: root.querySelectorAll(".okit-collapsible.is-collapsed").length };
     `);
     if (ownWindow) sCdp.close();
     await schliesseEinstellungen(cdp).catch(() => undefined);
     const order = ["Repair", "Exceptions", "Replacements", "Log", "Advanced"];
     const idx = order.map((h) => s.heads.indexOf(h));
-    record("I Einstellungen: Hilfe-Zeile zuerst, Gruppen in der Reihenfolge der Spec", s.first === "Help" && idx.every((i, k) => i >= 0 && (k === 0 || i > idx[k - 1])) && s.coll === 3, `erste=${q(s.first)}, Überschriften=${q(s.heads)}, eingeklappt=${s.coll}`);
+    record("I Einstellungen: Hilfe-Zeile zuerst, Gruppen in der Reihenfolge der Spec", s.first === "Help" && idx.every((i, k) => i >= 0 && (k === 0 || i > idx[k - 1])) && s.coll === 3 && s.heads.every((h, i) => s.heads.indexOf(h) === i) && s.folds.every((f) => !s.heads.includes(f ?? "")), `erste=${q(s.first)}, Überschriften=${q(s.heads)}, Klappzeilen=${q(s.folds)}, eingeklappt=${s.coll}`);
 
     // --- S7 / J ---
     console.log("\nS7 · Startscan mit Massendateien");
