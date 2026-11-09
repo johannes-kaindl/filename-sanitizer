@@ -10,7 +10,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Projekt:** `filename-sanitizer` — Obsidian-Plugin, das Dateinamen mit Zeichen, die Sync oder Links ablehnen (`: ? * " < > | \ / # ^ [ ]`), nach einstellbaren Regeln repariert, jede Änderung protokolliert und schreibenden Plugins eine API (`sanitizeName`, `checkName`) anbietet. Es benennt nur mit `app.fileManager.renameFile` um und überschreibt und löscht nie. Autor: Johannes Kaindl.
 
-**Kit-first-Befund:** Die Regeln liegen als reine Funktionen in `code-kit` (`filename-policy`), der API-Vertrag und der Schreiber-Baustein `safeFileName` in `obsidian-kit` (`filename-sanitizer-source`, `safe-file-name`). Das Plugin besitzt Einstellungen, Reparatur, Prüfliste, Protokoll und die API.
+**Kit-first-Befund:** Die Regeln liegen als reine Funktionen in `code-kit` (`filename-policy`), der API-Vertrag und der Schreiber-Baustein `safeFileName` in `obsidian-kit` (`filename-sanitizer-source`, `safe-file-name`). Aus code-kit 0.63.0 kommen außerdem `matchIgnoreChain`, `exactIgnoreLine` („Immer so lassen“, bei `null` legt der Knopf nichts an und meldet es), `createRepeatGuard` (3 Reparaturen je Quellpfad in 10 Minuten) und `affixDiffSegments`. Das Plugin besitzt Einstellungen, Reparatur, Prüfliste, Protokoll und die API.
 
 ## Architecture principles
 
@@ -22,14 +22,12 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 src/core/constants.ts       feste Grenzen (Ruhezeit, Wiederholungsschutz, Frist)
 src/core/settings.ts        SanitizerSettings, loadSettings (Feldreparatur), trySetPolicy
 src/core/queue.ts           createQuietQueue (Ruhezeit je Pfad, injizierte Timer)
-src/core/repeat-guard.ts    createRepeatGuard (3 Reparaturen je Quellpfad in 10 Minuten)
-src/core/decide.ts          decide (none | exception | rename | identical | review), isException, orderForRepair, initialSnapshot
+src/core/decide.ts          decide (none | exception | rename | identical | review; Ausnahmen über Kit-`matchIgnoreChain` mit Regel-Cache), orderForRepair, initialSnapshot
 src/core/scan.ts            scanDecisions (alle Funde in Reparaturreihenfolge)
 src/core/log-entry.ts       Protokollzeilen (Schema 1), logFileName, expiredLogFiles, summarizeBurst
 src/core/api.ts             createApi (Plugin-API v1, synchron, Fehler als Werte)
-src/core/review-view.ts     ViewModel der Prüfliste (reviewItems, applyGate, nameDiff)
+src/core/review-view.ts     ViewModel der Prüfliste (reviewItems, applyGate; Namensvergleich über Kit-`affixDiffSegments`)
 src/core/log-view.ts        ViewModel des Protokolls (logRows, logFilterOptions)
-src/core/exceptions.ts      exceptionLine („Immer so lassen“)
 src/obsidian/engine.ts      RepairEngine: Ereignisse, Ruhezeit, Neuprüfung, eine Umbenennung zur Zeit mit Frist, Alias, Protokoll
 src/obsidian/device.ts      geräteeigene Werte im lokalen Speicher (repairs, name, snapshot)
 src/obsidian/log-store.ts   .jsonl je Gerät und Monat im Vault
