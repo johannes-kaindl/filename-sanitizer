@@ -4,7 +4,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Profil:** `ts-node` · `obsidian-plugin`.
 
-**Stand 2026-11-08: gebaut (0.1.0, nicht released, nicht getaggt).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke am Fixture (`docs/SMOKE.md`). Offen für den Erst-Release: Sync-Messungen S1 bis S4 und S6 mit Johannes (Cockpit-Task), Release und Store durch den Master. Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
+**Stand 2026-11-09: gebaut und release-reif bis auf GitHub-Repo (0.1.0, nicht released, nicht getaggt).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke 13 von 13 auf Obsidian 1.15.0 (`docs/SMOKE.md`), Docs-Lint und README-Bilder (`scripts/shots.ts`) ohne Befund, Release-Infrastruktur vendort. Offen für den Erst-Release: GitHub-Repo (legt der Master privat an), Sync-Messungen S1 bis S4 und S6 mit Johannes (Cockpit-Task), Release und Store durch den Master. Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
 
 ## Project character
 
@@ -37,6 +37,7 @@ src/obsidian/view.ts        eine Ansicht mit Tabs Prüfen und Protokoll (Kit-Hub
 src/obsidian/settings-tab.ts  deklarativer Tab, Hilfe-Zeile zuerst, drei eingeklappte Gruppen
 src/main.ts                 onload: Einstellungen, Gerät, Protokoll, API, Motor, Ansicht, Befehle
 scripts/gui-smoke.ts        CDP-Treiber (Zweitinstanz), docs/SMOKE.md
+scripts/shots.ts            Aufnahme der README-Bilder (Zweitinstanz), Vertrag docs/images/README.md
 fixtures/vault/             Fixture für den GUI-Smoke
 ```
 
@@ -44,6 +45,7 @@ fixtures/vault/             Fixture für den GUI-Smoke
 
 - `npm run gate` — lint + typecheck + typecheck:test + typecheck:scripts + test + check:pure + build; Pflicht vor jedem Commit.
 - `npm run smoke:gui -- --setup` baut den Staging-Vault, `npm run smoke:gui -- --port <Port> [--shots <Ordner>]` fährt den Smoke gegen die Zweitinstanz (Rezept im Dateikopf von `scripts/gui-smoke.ts`).
+- `npm run shots -- --setup` und `npm run shots -- --port <Port>` nehmen die README-Bilder in `docs/images/` auf (Zweitinstanz, Rezept im Dateikopf von `scripts/shots.ts`, Vertrag `docs/images/README.md`); `npm run shots:check` prüft den Bild-Standard.
 - `sh tools/sync-kit.sh [--check]` — Kit-Vendoring aus `../obsidian-kit` und `../../libs/code-kit`.
 - `node ../tools/css_baseline/check.mjs styles.css` — CSS-Baseline (sobald es `styles.css` gibt).
 - `python3 ../tools/bibliothek/gate.py --repo filename-sanitizer --liste` — Bibliothek-Gate, Ziel 0 open.

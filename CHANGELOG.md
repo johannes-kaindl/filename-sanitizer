@@ -16,4 +16,4 @@ All notable changes to this project are documented here. The format follows
 - Log as one `.jsonl` file per device and month, with origin, effect, environment and chosen front matter fields, and a log view with filters.
 - Plugin API v1 (`sanitizeName`, `checkName`) for writing plugins, with the fallback `safeFileName` in `obsidian-kit`.
 - Settings tab with replacements per character, exceptions in `.gitignore` style, log options and advanced values; device values stay on the device.
-- English and German texts, documentation in both languages.
+- English and German texts, documentation in both languages, README with screenshots of the review list, the log and the settings.

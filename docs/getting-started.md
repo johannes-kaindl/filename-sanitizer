@@ -2,7 +2,7 @@
 
 ## First start
 
-Enable the plugin. On this device nothing is renamed at the first start: every name that already breaks the rules is listed in the review list with the reason *Existing name*. Open it with the command **Open review and log**. All entries are ticked; press **Rename ticked** once to repair them, or untick what you want to keep. **Always keep** adds the exact path to the exceptions.
+Enable the plugin. On this device nothing is renamed at the first start: every name that already breaks the rules is listed in the review list with the reason *Existing name*. Open it with the command **Open review and log**. All entries are ticked (except duplicates, which are never renamed); press **Rename ticked** once to repair them, or untick what you want to keep. **Always keep** adds the exact path to the exceptions.
 
 From then on a file that appears with an invalid name is repaired by itself, after it has not changed for the quiet time (5 seconds by default). A notice names the old and the new name, or the number of files when there were several; a click opens the log.
 

@@ -6,9 +6,11 @@
 
 [![Lizenz: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Doku: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](LICENSE-DOCS)
-![Plattform](https://img.shields.io/badge/platform-Obsidian%201.15.1%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
+![Plattform](https://img.shields.io/badge/platform-Obsidian%201.15.0%2B%20%C2%B7%20desktop%20%26%20mobile-7c3aed)
 
 LLMs, Skripte und andere Werkzeuge legen Dateien an, deren Namen Zeichen enthalten, die Obsidian Sync am Handy ablehnt (`: ? * " < > | # ^ [ ]`) oder die Links brechen. Filename Sanitizer benennt solche Dateien nach festen, einstellbaren Regeln um, lässt die Links mitgehen, protokolliert jede Änderung mit allem, was beim Finden des Schreibers hilft, und bleibt dir aus dem Weg. Er überschreibt nie und löscht nie eine Datei.
+
+<img src="https://raw.githubusercontent.com/johannes-kaindl/filename-sanitizer/main/docs/images/hero.png" alt="Links der Datei-Explorer mit schon reparierten Notizen wie Release plan — v2 und Standup — Monday, rechts die Prüfliste mit vier vorhandenen Namen, die auf Bestätigung warten" width="600">
 
 ## Funktionen
 
@@ -24,23 +26,68 @@ LLMs, Skripte und andere Werkzeuge legen Dateien an, deren Namen Zeichen enthalt
 
 ## Voraussetzungen
 
-- **Obsidian 1.15.1+**, Desktop und Mobil. Auf Handy und Tablet benennt das Plugin vorab nicht um (Schalter *Dieses Gerät repariert*), damit zwei Geräte nicht um dieselbe Datei wetteifern; Einstellungen, Protokoll und API laufen überall.
+- **Obsidian 1.15.0+**, Desktop und Mobil. Auf Handy und Tablet benennt das Plugin vorab nicht um (Schalter *Dieses Gerät repariert*), damit zwei Geräte nicht um dieselbe Datei wetteifern; Einstellungen, Protokoll und API laufen überall.
 - **Das automatische Umbenennen braucht die Obsidian-Einstellung *Dateien und Links → Interne Links automatisch aktualisieren* eingeschaltet.** Sonst öffnet Obsidian für jede Datei mit Backlinks einen Dialog, und alle weiteren Umbenennungen warten dahinter. Ist die Einstellung aus, benennt das Plugin nicht von selbst um und füllt die Prüfliste. Es ändert diese Einstellung nie.
 - Das Plugin stellt keine Netzwerkanfragen.
 
 ## Installation
 
-Noch nicht veröffentlicht. Danach installierst du es aus den Release-Dateien: Kopiere `main.js`, `manifest.json` und `styles.css` in den Ordner `filename-sanitizer` im Plugin-Ordner deines Vaults und schalte das Plugin unter **Einstellungen → Community-Plugins** ein.
+### Über Obsidians Community-Plugins
+
+Sobald das Plugin den Store-Review bestanden hat: **Einstellungen → Community-Plugins → Durchsuchen**, nach *Filename Sanitizer* suchen, **Installieren**, **Aktivieren**.
+
+### Manuell
+
+Lade `main.js`, `manifest.json` und `styles.css` vom [neuesten Release](https://github.com/johannes-kaindl/filename-sanitizer/releases/latest) herunter, kopiere sie in den Ordner `filename-sanitizer` im Plugin-Ordner deines Vaults (`<Vault>/.obsidian/plugins/`) und schalte das Plugin unter **Einstellungen → Community-Plugins** ein.
+
+### Mit BRAT
+
+Füge `johannes-kaindl/filename-sanitizer` im Plugin BRAT als Beta-Plugin hinzu.
 
 ## Benutzung
 
-Öffne **Prüfliste und Protokoll öffnen** über die Befehlspalette, um zu sehen, was auf dich wartet und was geschehen ist. **Dateinamen jetzt prüfen** durchsucht den Vault erneut. Die Einstellungen sind gegliedert in *Reparatur*, *Ausnahmen* und drei eingeklappte Gruppen *Ersetzungen*, *Protokoll* und *Erweitert*. Einzelheiten: [Doku](docs/README.md).
+Beim ersten Einschalten auf einem Gerät wird nichts umbenannt: Namen, die schon gegen die Regeln verstoßen, warten in der Prüfliste. Danach wird eine neue Datei mit ungültigem Namen nach der Ruhezeit repariert, und ein Popup sagt, was geschehen ist.
 
-## Grenzen
+- **Prüfliste und Protokoll öffnen** (Befehlspalette) öffnet die Ansicht mit den Tabs *Prüfen* und *Protokoll*.
+- **Dateinamen jetzt prüfen** durchsucht den Vault erneut und füllt die Prüfliste.
+- In der Prüfliste hakst du an, ab oder sagst *Immer so lassen* und drückst dann **Angehakte umbenennen**.
 
+Schritt für Schritt: [Erste Schritte](https://github.com/johannes-kaindl/filename-sanitizer/blob/main/docs/getting-started.md).
+
+## Konfiguration
+
+Einstellungen → Filename Sanitizer. Zuerst kommt die Hilfe, dann die Gruppen *Reparatur* und *Ausnahmen* und drei eingeklappte Gruppen.
+
+- **Reparatur** — Betriebsart (*Automatisch* oder *Erst bestätigen*), *Dieses Gerät repariert* (an auf Desktops, aus auf Handy und Tablet, nur auf dem Gerät gespeichert), Gerätename, das Popup nach Reparaturen und der alte Name als Alias (nur Markdown-Notizen).
+- **Ausnahmen** — Pfade, die nie repariert werden, ein Muster je Zeile, geschrieben wie eine `.gitignore`.
+- **Ersetzungen** — was jedes ungültige Zeichen ersetzt; leer entfernt es. Eine Ersetzung, die selbst ungültig ist, wird abgelehnt.
+- **Protokoll** — Ordner (vorab `Filename Sanitizer/Log`), Aufbewahrung in Monaten (vorab 12, 0 behält alles) und welche Felder in jede Zeile kommen.
+- **Erweitert** — Ruhezeit (vorab 5000 ms), zusätzliche ungültige Zeichen und eine größte Namenslänge in Bytes.
+
+<a href="https://raw.githubusercontent.com/johannes-kaindl/filename-sanitizer/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/johannes-kaindl/filename-sanitizer/main/docs/images/thumbs/settings.png" width="380" alt="Der ganze Einstellungs-Tab in einem Bild: die Hilfe-Zeile zuerst, dann die offenen Gruppen Repair und Exceptions und die eingeklappten Gruppen Replacements, Log und Advanced"></a><br><sub>Der ganze Tab (Klick für die volle Größe)</sub>
+
+## Funktionsweise
+
+Das Plugin beobachtet neue und umbenannte Dateien. Eine Datei wird erst geprüft, wenn sie die Ruhezeit lang unverändert blieb, eine Umbenennung nach der anderen, Ordner vor ihrem Inhalt. Es benennt mit Obsidians eigenem Dateimanager um, daher gehen Links auf die Datei mit, und schreibt eine Zeile ins Protokoll. Ein vorhandener Name wird nie überschrieben: bei gleichem Inhalt bleibt die Datei als markierte Dublette liegen, bei anderem Inhalt bekommt sie eine Nummer. Nichts wird je gelöscht.
+
+<img src="https://raw.githubusercontent.com/johannes-kaindl/filename-sanitizer/main/docs/images/review.png" alt="Die Prüfliste mit vier Dateinamen, die einen Blick brauchen: jede Karte zeigt den Grund Existing name, den Namen mit den zu ändernden Zeichen markiert und die Knöpfe Include, Skip und Always keep" width="600">
+
+Was das Plugin nicht allein tun darf, geht in die Prüfliste: Namen, die vor dem ersten Start auf einem Gerät bestanden oder erst durch eine Regeländerung ungültig wurden, Namen, die immer wiederkommen, und alle Namen, solange in Obsidian „Interne Links automatisch aktualisieren“ aus ist.
+
+<img src="https://raw.githubusercontent.com/johannes-kaindl/filename-sanitizer/main/docs/images/log.png" alt="Der Protokoll-Tab mit vier Umbenennungen, neueste zuerst, jede mit altem und neuem Namen und den angewandten Regeln, darüber die Filter für Gerät, Ereignis und Ordner" width="600">
+
+### Grenzen
+
+- **Das automatische Umbenennen braucht die Obsidian-Einstellung *Dateien und Links → Interne Links automatisch aktualisieren* eingeschaltet.** Sonst öffnet Obsidian für jede Datei mit Backlinks einen Dialog, und alle weiteren Umbenennungen warten dahinter. Ist die Einstellung aus, benennt das Plugin nicht von selbst um und füllt die Prüfliste. Es ändert diese Einstellung nie.
 - Ein Name mit Rückwärts-Schrägstrich (`\`) ist für Obsidian unsichtbar (nicht im Index, kein Ereignis); das Plugin kann ihn nicht reparieren.
 - Dateien jeder Endung werden automatisch umbenannt, solange in Obsidian „Interne Links automatisch aktualisieren“ an ist.
-- Ob Obsidian Sync jedes Zeichen der Standardtabelle auf jedem Gerät annimmt, wie genau ein Rennen zweier Desktops ausgeht und ob Sync die Protokolldatei mitnimmt, lässt sich nur an einem echten Konto messen; siehe [Fehlersuche](docs/troubleshooting.md).
+- Ob Obsidian Sync jedes Zeichen der Standardtabelle auf jedem Gerät annimmt, wie genau ein Rennen zweier Desktops ausgeht und ob Sync die Protokolldatei mitnimmt, lässt sich nur an einem echten Konto messen; siehe [Fehlersuche](https://github.com/johannes-kaindl/filename-sanitizer/blob/main/docs/troubleshooting.md).
+
+## Dokumentation
+
+- [Dokumentationsübersicht](https://github.com/johannes-kaindl/filename-sanitizer/blob/main/docs/README.md) — alle Anleitungen an einem Ort.
+- [Erste Schritte](https://github.com/johannes-kaindl/filename-sanitizer/blob/main/docs/getting-started.md) — was nach dem Einschalten geschieht und wie du Prüfliste und Protokoll benutzt.
+- [Fehlersuche](https://github.com/johannes-kaindl/filename-sanitizer/blob/main/docs/troubleshooting.md) — warum eine Datei nicht umbenannt wurde und was das Plugin nicht kann.
 
 ## Lizenz
 
