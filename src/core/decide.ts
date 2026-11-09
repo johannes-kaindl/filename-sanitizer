@@ -23,11 +23,6 @@ function rulesFor(patterns: string): ParsedPatterns {
   return cachedRules;
 }
 
-/** Ausnahme, wenn ein Muster den Pfad selbst oder einen seiner Ordner trifft (Kit: `matchIgnoreChain`). */
-export function isException(path: string, patterns: string): boolean {
-  return matchIgnoreChain(rulesFor(patterns).rules, path) !== null;
-}
-
 export function targetFor(path: string, name: string): string {
   return joinVaultPath(vaultDirname(path), name);
 }
@@ -45,7 +40,7 @@ export function decide(input: {
   const name = lastSegment(path);
   const hits = checkSegment(name, settings.policy, kind);
   if (hits.length === 0) return { kind: "none" };
-  if (isException(path, settings.exceptions)) return { kind: "exception" };
+  if (matchIgnoreChain(rulesFor(settings.exceptions).rules, path) !== null) return { kind: "exception" };
 
   const review = (reason: ReviewReason): Decision => ({ kind: "review", reason, hits });
   const manual = trigger === "list";

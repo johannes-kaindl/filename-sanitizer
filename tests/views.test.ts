@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyGate, reviewItems } from "../src/core/review-view";
 import { logFilterOptions, logRows } from "../src/core/log-view";
-import { exactIgnoreLine } from "../src/vendor/kit/ignore";
-import { isException } from "../src/core/decide";
+import { exactIgnoreLine, matchIgnoreChain, parsePatterns } from "../src/vendor/kit/ignore";
 import type { ReviewEntry } from "../src/core/review-entry";
 import type { LogInput } from "../src/core/log-entry";
 import { t } from "../src/vendor/kit/i18n";
@@ -85,6 +84,8 @@ describe("log view model", () => {
   });
   it("filter options list what is present", () => { expect(logFilterOptions(entries)).toEqual({ devices: ["iPhone", "M5"], events: ["repariert", "vorgemerkt"] }); });
 });
+
+const isException = (path: string, patterns: string): boolean => matchIgnoreChain(parsePatterns(patterns).rules, path) !== null;
 
 describe("exact exception line", () => {
   it("keeps exactly this path and nothing else", () => {

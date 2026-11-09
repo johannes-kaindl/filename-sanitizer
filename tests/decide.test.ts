@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decide, initialSnapshot, isException, orderForRepair, targetFor, type TargetState, type Trigger } from "../src/core/decide";
+import { decide, initialSnapshot, orderForRepair, targetFor, type TargetState, type Trigger } from "../src/core/decide";
 import { loadSettings, type SanitizerSettings } from "../src/core/settings";
 import { DEFAULT_FILENAME_POLICY } from "../src/vendor/kit/filename-policy";
 
@@ -61,12 +61,13 @@ describe("decide", () => {
 
 describe("helpers", () => {
   it("targetFor keeps the folder", () => { expect(targetFor("a/b/c: d.md", "c — d.md")).toBe("a/b/c — d.md"); expect(targetFor("c: d.md", "x.md")).toBe("x.md"); });
-  it("isException matches ancestors, names at any depth and exact paths", () => {
-    expect(isException("Archiv/sub/a: b.md", "Archiv/")).toBe(true);
-    expect(isException("x/Archiv/a.md", "Archiv")).toBe(true);
-    expect(isException("Notes/a: b.md", "Archiv/")).toBe(false);
-    expect(isException("Notes/a: b.md", "Notes/a: b.md")).toBe(true);
-    expect(isException("Notes/a: b.md", "")).toBe(false);
+  it("exceptions match ancestors, names at any depth and exact paths", () => {
+    const isEx = (path: string, exceptions: string): boolean => run({ path, settings: loadSettings({ exceptions }) }).kind === "exception";
+    expect(isEx("Archiv/sub/a: b.md", "Archiv/")).toBe(true);
+    expect(isEx("x/Archiv/a: b.md", "Archiv")).toBe(true);
+    expect(isEx("Notes/a: b.md", "Archiv/")).toBe(false);
+    expect(isEx("Notes/a: b.md", "Notes/a: b.md")).toBe(true);
+    expect(isEx("Notes/a: b.md", "")).toBe(false);
   });
   it("orderForRepair puts folders before contents, shallow before deep", () => {
     const items = [{ path: "o:r/a?.md", isFolder: false }, { path: "x.md", isFolder: false }, { path: "o:r", isFolder: true }, { path: "o:r/i:n", isFolder: true }];
