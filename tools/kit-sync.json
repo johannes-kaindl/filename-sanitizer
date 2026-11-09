@@ -4,7 +4,7 @@
       "ref": "0.82.0"
     },
     "code-kit": {
-      "ref": "0.62.0"
+      "ref": "0.63.0"
     }
   },
   "targets": [
@@ -17,7 +17,9 @@
         "ignore",
         "rotation",
         "settings",
-        "i18n"
+        "i18n",
+        "repeat-guard",
+        "word-diff"
       ]
     },
     {

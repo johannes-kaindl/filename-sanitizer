@@ -1,11 +1,11 @@
-import { ItemView, TFile } from "obsidian";
+import { ItemView, Notice, TFile } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
-import { exceptionLine } from "../core/exceptions";
 import type { LogEvent, LogInput } from "../core/log-entry";
 import { logFilterOptions, logRows, type LogFilter } from "../core/log-view";
 import { applyGate, reviewItems } from "../core/review-view";
 import { tn } from "../i18n/strings";
 import { t } from "../vendor/kit/i18n";
+import { exactIgnoreLine } from "../vendor/kit/ignore";
 import { buildHubInto, type HubController, type HubPanel } from "../vendor/kit-obsidian/hub";
 import { buildReviewList, type ReviewListStrings } from "../vendor/kit-obsidian/review-list";
 import type FilenameSanitizerPlugin from "../main";
@@ -14,6 +14,16 @@ export const VIEW_TYPE_SANITIZER = "filename-sanitizer-view";
 export type SanitizerTab = "review" | "log";
 
 const LOG_LIMIT = 500;
+
+export type KeepAlways = { kind: "added"; exceptions: string } | { kind: "present" } | { kind: "impossible" };
+
+/** „Immer so lassen“: hängt die genaue Zeile für `path` an die Ausnahmen. `impossible`, wenn keine Zeile genau diesen Pfad ausdrücken kann (Randleerzeichen, doppelte Slashes, Zeilenumbruch); dann wird nichts angelegt. */
+export function addKeepAlways(exceptions: string, path: string): KeepAlways {
+  const line = exactIgnoreLine(path);
+  if (line === null) return { kind: "impossible" };
+  if (exceptions.split("\n").some((l) => l.trim() === line)) return { kind: "present" };
+  return { kind: "added", exceptions: exceptions.trim() === "" ? line : `${exceptions.replace(/\s+$/, "")}\n${line}` };
+}
 /** Gründe, die der Motor als `message` einer Zeile „vorgemerkt“ schreibt. */
 const REASON_KEYS = ["mode", "link-setting", "legacy", "repeat"];
 
@@ -90,9 +100,10 @@ class ReviewPanel implements HubPanel<"review"> {
   /** „Immer so lassen“: der genaue Pfad kommt in die Ausnahmen, der Eintrag verschwindet beim nächsten Scan. */
   private async keepAlways(path: string): Promise<void> {
     const s = this.plugin.settings;
-    const line = exceptionLine(path);
-    if (s.exceptions.split("\n").some((l) => l.trim() === line)) return;
-    s.exceptions = s.exceptions.trim() === "" ? line : `${s.exceptions.replace(/\s+$/, "")}\n${line}`;
+    const r = addKeepAlways(s.exceptions, path);
+    if (r.kind === "impossible") { new Notice(t("notice.keepImpossible", path)); return; }
+    if (r.kind === "present") return;
+    s.exceptions = r.exceptions;
     await this.plugin.saveSettings();
     await this.plugin.engine.scanNow();
   }

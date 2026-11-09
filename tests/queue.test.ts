@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createQuietQueue, type Timers } from "../src/core/queue";
-import { createRepeatGuard } from "../src/core/repeat-guard";
+import { createRepeatGuard } from "../src/vendor/kit/repeat-guard";
 
 /** Manuelle Uhr: setTimeout merkt sich Fälligkeit, advance(ms) feuert alles Fällige in Reihenfolge. */
 function fakeClock() {

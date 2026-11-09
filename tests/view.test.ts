@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ItemView } from "obsidian";
-import { SanitizerView, VIEW_TYPE_SANITIZER } from "../src/obsidian/view";
+import { SanitizerView, VIEW_TYPE_SANITIZER, addKeepAlways } from "../src/obsidian/view";
 import type FilenameSanitizerPlugin from "../src/main";
 import { setLang, t } from "../src/vendor/kit/i18n";
 import "../src/i18n/strings";
@@ -28,6 +28,16 @@ describe("SanitizerView", () => {
       for (const k of ["mode", "link-setting", "legacy", "repeat", "identical", "stalled"]) expect(t(`review.reason.${k}`)).not.toBe(`review.reason.${k}`);
       for (const k of ["repariert", "identisch", "kollision", "fehlgeschlagen", "vorgemerkt", "bestätigt", "übersprungen", "wiederholt"]) expect(t(`log.event.${k}`)).not.toBe(`log.event.${k}`);
     }
+    setLang("en");
+  });
+  it("addKeepAlways appends one exact line, skips a duplicate and refuses a path no line can say", () => {
+    expect(addKeepAlways("", "a: b.md")).toEqual({ kind: "added", exceptions: "/a: b.md" });
+    expect(addKeepAlways("Archiv/\n", "a: b.md")).toEqual({ kind: "added", exceptions: "Archiv/\n/a: b.md" });
+    expect(addKeepAlways("/a: b.md", "a: b.md")).toEqual({ kind: "present" });
+    for (const path of [" a: b.md", "a: b.md ", "x//a: b.md", "x/a:\nb.md", ""]) expect(addKeepAlways("Archiv/", path)).toEqual({ kind: "impossible" });
+  });
+  it("the not-expressible notice exists in both languages", () => {
+    for (const lang of ["en", "de"] as const) { setLang(lang); expect(t("notice.keepImpossible", "x")).not.toBe("notice.keepImpossible"); }
     setLang("en");
   });
 });

@@ -1,5 +1,5 @@
 import { applyPolicy, checkSegment, numberedName, type FilenameHit, type FilenamePolicy } from "../vendor/kit/filename-policy";
-import { matchIgnore, parsePatterns, type ParsedPatterns } from "../vendor/kit/ignore";
+import { matchIgnoreChain, parsePatterns, type ParsedPatterns } from "../vendor/kit/ignore";
 import { joinVaultPath, vaultDirname } from "../vendor/kit/vault-path";
 import type { SanitizerSettings } from "./settings";
 
@@ -23,13 +23,9 @@ function rulesFor(patterns: string): ParsedPatterns {
   return cachedRules;
 }
 
-/** Ausnahme, wenn ein Muster den Pfad selbst oder einen seiner Ordner trifft (`matchIgnore` kennt nur den genauen Pfad). */
+/** Ausnahme, wenn ein Muster den Pfad selbst oder einen seiner Ordner trifft (Kit: `matchIgnoreChain`). */
 export function isException(path: string, patterns: string): boolean {
-  const { rules } = rulesFor(patterns);
-  if (rules.length === 0) return false;
-  const parts = path.split("/");
-  for (let i = 1; i <= parts.length; i++) if (matchIgnore(rules, parts.slice(0, i).join("/")) !== null) return true;
-  return false;
+  return matchIgnoreChain(rulesFor(patterns).rules, path) !== null;
 }
 
 export function targetFor(path: string, name: string): string {

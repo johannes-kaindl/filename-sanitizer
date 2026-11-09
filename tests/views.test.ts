@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { applyGate, nameDiff, reviewItems } from "../src/core/review-view";
+import { applyGate, reviewItems } from "../src/core/review-view";
 import { logFilterOptions, logRows } from "../src/core/log-view";
-import { exceptionLine } from "../src/core/exceptions";
+import { exactIgnoreLine } from "../src/vendor/kit/ignore";
 import { isException } from "../src/core/decide";
 import type { ReviewEntry } from "../src/core/review-entry";
 import type { LogInput } from "../src/core/log-entry";
@@ -34,11 +34,11 @@ describe("review view model", () => {
     expect(item.author).toBe(t("review.reason.identical"));
     expect(item.decision).toBe("rejected");
   });
-  it("nameDiff keeps equal ends and marks the middle", () => {
-    expect(nameDiff("ab: cd.md", "ab — cd.md")).toEqual([
+  it("review items diff the names: equal ends stay, the middle is struck and inserted", () => {
+    const [item] = reviewItems([e("ab: cd.md", { target: "ab — cd.md" })], new Set());
+    expect(item.segments).toEqual([
       { kind: "same", text: "ab" }, { kind: "del", text: ":" }, { kind: "ins", text: " —" }, { kind: "same", text: " cd.md" },
     ]);
-    expect(nameDiff("same.md", "same.md")).toEqual([{ kind: "same", text: "same.md" }]);
   });
 });
 
@@ -86,14 +86,14 @@ describe("log view model", () => {
   it("filter options list what is present", () => { expect(logFilterOptions(entries)).toEqual({ devices: ["iPhone", "M5"], events: ["repariert", "vorgemerkt"] }); });
 });
 
-describe("exceptionLine", () => {
+describe("exact exception line", () => {
   it("keeps exactly this path and nothing else", () => {
     for (const path of ["a: b.md", "Notes/a*b?.md", "#x.md", "!y.md", "Ord[1]/c.md"]) {
-      const line = exceptionLine(path);
+      const line = exactIgnoreLine(path) as string;
       expect(isException(path, line)).toBe(true);
       expect(isException(`other/${path}`, line)).toBe(false);
       expect(isException("zzz.md", line)).toBe(false);
     }
-    expect(isException("Notes/aXbY.md", exceptionLine("Notes/a*b?.md"))).toBe(false);
+    expect(isException("Notes/aXbY.md", exactIgnoreLine("Notes/a*b?.md") as string)).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { RENAME_DEADLINE_MS, REPEAT_LIMIT, REPEAT_WINDOW_MS } from "../core/cons
 import { decide, initialSnapshot, orderForRepair, targetFor, type Decision, type TargetState, type Trigger } from "../core/decide";
 import { toLogLine, summarizeBurst, type LogEvent, type LogInput } from "../core/log-entry";
 import { createQuietQueue, type Timers } from "../core/queue";
-import { createRepeatGuard } from "../core/repeat-guard";
+import { createRepeatGuard } from "../vendor/kit/repeat-guard";
 import type { ReviewEntry } from "../core/review-entry";
 import { scanDecisions } from "../core/scan";
 import type { SanitizerSettings } from "../core/settings";
