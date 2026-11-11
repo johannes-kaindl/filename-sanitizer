@@ -4,7 +4,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Profil:** `ts-node` · `obsidian-plugin`.
 
-**Stand 2026-11-09: gebaut und release-reif bis auf GitHub-Repo (0.1.0, nicht released, nicht getaggt).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke 13 von 13 auf Obsidian 1.15.0 (`docs/SMOKE.md`), Docs-Lint und README-Bilder (`scripts/shots.ts`) ohne Befund, Release-Infrastruktur vendort. Offen für den Erst-Release: GitHub-Repo (legt der Master privat an), Sync-Messungen S1 bis S4 und S6 mit Johannes (Cockpit-Task), Release und Store durch den Master. Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
+**Stand 2026-11-11: 0.1.0 veröffentlicht (Tag 0.1.0, Store: Passed · Excellent, laut Cockpit).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke 14 von 14 auf Obsidian 1.15.1 (`docs/SMOKE.md`), Docs-Lint und README-Bilder (`scripts/shots.ts`) ohne Befund. Offen: Sync-Messungen S2 und S4 mit zweitem Gerät, die Einstellungen im schmalen Fenster am iPhone (Cockpit-Tasks). Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
 
 ## Project character
 
