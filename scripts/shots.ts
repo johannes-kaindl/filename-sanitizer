@@ -20,7 +20,7 @@ import { dirname, join } from "node:path";
 import { cwd } from "node:process";
 
 import { parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
-import { Cdp, attachTo, bereiteInstanzVor, clearNotices, pollUntil, requireVisible, schliesseEinstellungen } from "../../tools/obsidian-cdp/cdp.js";
+import { Cdp, attachTo, bereiteInstanzVor, clearNotices, pollUntil, requireUntil, requireVisible, schliesseEinstellungen } from "../../tools/obsidian-cdp/cdp.js";
 import { boxOf, capture, setWindowSize, withMetrics, writeShot, type Rect } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, requireEigenerBuild, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
@@ -96,7 +96,7 @@ const SHOTS: Motiv[] = [
     async run(cdp) {
       await oeffneAnsicht(cdp, "log");
       await cdp.evaluate(`app.workspace.leftSplit.collapse(); app.workspace.rightSplit.collapse(); return true;`);
-      await pollUntil(cdp, `return document.querySelectorAll(".workspace-leaf.mod-active .okit-hub-panel:not([hidden]) *").length > 8 ? true : null;`, 8000, 200).catch(() => undefined);
+      await requireUntil(cdp, `document.querySelectorAll(".workspace-leaf.mod-active .okit-hub-panel:not([hidden]) *").length > 8`, "Der Tab Protokoll zeigt keinen Inhalt", 8000, 200);
       await clearNotices(cdp);
       await sleep(800);
       return inhaltBox(cdp, false);
@@ -146,7 +146,7 @@ async function inhaltBox(cdp: Cdp, mitSeitenleiste: boolean): Promise<Rect | nul
 /** Öffnet die Ansicht und wählt den Tab (`review` oder `log`). */
 async function oeffneAnsicht(cdp: Cdp, tab: "review" | "log"): Promise<void> {
   await cdp.evaluate(`await ${P}.activateView(${q(tab)}); return true;`);
-  await pollUntil(cdp, `return document.querySelector('.okit-hub-tab[data-tab=${q(tab)}][aria-selected="true"]') ? true : null;`, 8000, 200);
+  await requireUntil(cdp, `document.querySelector('.okit-hub-tab[data-tab=${q(tab)}][aria-selected="true"]')`, `Der Tab ${tab} wurde nicht gewählt`, 8000, 200);
 }
 
 /** Zeigt die linke Seitenleiste mit dem Datei-Explorer. */
@@ -205,10 +205,10 @@ async function main(): Promise<void> {
     await cdp.evaluate(`await app.plugins.enablePlugin(${q(PLUGIN_ID)}); return true;`);
     const geladen = await cdp.evaluate<boolean>(`return Boolean(${P});`);
     if (!geladen) throw new Error("Plugin nicht geladen (Restricted Mode?) — ohne Plugin zeigte jedes Bild eine Oberfläche ohne Filename Sanitizer.");
-    await pollUntil(cdp, `return ${P}.engine.pending().length >= ${ALTBESTAND.length} ? true : null;`, 12000, 300);
+    await requireUntil(cdp, `${P}.engine.pending().length >= ${ALTBESTAND.length}`, "Der Altbestand steht nicht in der Prüfliste", 12000, 300);
     // Ein fremder Schreiber legt Dateien an; sie werden nach der Ruhezeit repariert und landen im Protokoll.
     for (const n of NEU) { w(n, `# ${n.replace(/\.md$/, "")}\n\nCreated by another tool.\n`); await sleep(400); }
-    await pollUntil(cdp, `return app.vault.getMarkdownFiles().some((f) => f.name === "Release plan — v2.md") && app.vault.getMarkdownFiles().some((f) => f.name === "Standup — Monday.md") ? true : null;`, QUIET_MS + 12000, 300);
+    await requireUntil(cdp, `app.vault.getMarkdownFiles().some((f) => f.name === "Release plan — v2.md") && app.vault.getMarkdownFiles().some((f) => f.name === "Standup — Monday.md")`, "Die fremd angelegten Dateien wurden nicht repariert", QUIET_MS + 12000, 300);
     await sleep(3500); // das Popup der Reparatur soll vorbei sein, sonst ragt es ins Bild
 
     const geplant = SHOTS.filter((s) => !nur || s.name === nur || s.name === `${nur}.png`);
