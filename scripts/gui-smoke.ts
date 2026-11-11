@@ -20,7 +20,7 @@ import { cwd } from "node:process";
 
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { Cdp, attachTo, beimAbbruch, bereiteInstanzVor, clearNotices, istAbgebrochen, notices, pollUntil, requireVisible, schliesseEinstellungen } from "../../tools/obsidian-cdp/cdp.js";
-import { capture, setWindowSize } from "../../tools/obsidian-cdp/shot.js";
+import { capture, setWindowSize, withMetrics } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, requireEigenerBuild, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
 const REPO_NAME = "filename-sanitizer";
@@ -43,6 +43,7 @@ const PUNKTE = [
   "G app.plugins.plugins[…].api antwortet (sanitizeName, checkName, Fehlerwert)",
   "H Haken weg lässt die Datei stehen, der angehakte Eintrag wird umbenannt",
   "I Einstellungen: Hilfe-Zeile zuerst, Gruppen in der Reihenfolge der Spec",
+  "K Einstellungen bei 390 px: kein seitliches Überlaufen, auch mit allen Gruppen aufgeklappt",
   "S7 Startscan bei 17.000 Dateien (Dauer gemessen)",
   "J Ansicht bei 390 px: 245 Karten, kein seitliches Überlaufen, Knöpfe greifbar",
 ] as const;
@@ -236,6 +237,53 @@ async function main(): Promise<void> {
     const order = ["Repair", "Exceptions", "Replacements", "Log", "Advanced"];
     const idx = order.map((h) => s.heads.indexOf(h));
     record("I Einstellungen: Hilfe-Zeile zuerst, Gruppen in der Reihenfolge der Spec", s.first === "Help" && idx.every((i, k) => i >= 0 && (k === 0 || i > idx[k - 1])) && s.coll === 3 && s.heads.every((h, i) => s.heads.indexOf(h) === i) && s.folds.every((f) => !s.heads.includes(f ?? "")), `erste=${q(s.first)}, Überschriften=${q(s.heads)}, Klappzeilen=${q(s.folds)}, eingeklappt=${s.coll}`);
+
+    // --- K --- (390 px bei geöffneten Einstellungen; ein Desktop-Fenster mit 390 px ist kein Handy, das Gerät misst der Master)
+    console.log("\nK · Einstellungen bei 390 px");
+    await cdp.evaluate(`app.workspace.leftSplit.collapse(); app.workspace.rightSplit.collapse(); return true;`);
+    await setWindowSize(cdp, 390, 844);
+    await cdp.evaluate(`app.setting.open(); await new Promise((r) => setTimeout(r, 500)); app.setting.openTabById(${q(PLUGIN_ID)}); await new Promise((r) => setTimeout(r, 1000)); return true;`);
+    let kCdp: Cdp = cdp; let kOwnWindow = false;
+    if (!(await cdp.evaluate<boolean>(`return Boolean(document.querySelector(".modal.mod-settings"));`))) { const win = await attachTo("settings", port, REPO_NAME); if (win) { kCdp = win; kOwnWindow = true; } }
+    // Das Fenster der Einstellungen behält seine Breite; die 390 px entstehen durch Simulation (`withMetrics`), und nur darin wird gemessen.
+    // Gemessen wird: rechte Kante jeder Zeile gegen die Fensterbreite, Rollbreite des Inhalts, kleinste Bedienelemente, Namen mit abgeschnittenem Text.
+    const kMessen = `
+      const root = document.querySelector(".vertical-tab-content");
+      if (!root) return null;
+      const rows = Array.from(root.querySelectorAll(".setting-item")).filter((e) => e.getBoundingClientRect().width > 0);
+      const vw = window.innerWidth;
+      const maxRight = rows.length ? Math.max(...rows.map((e) => e.getBoundingClientRect().right)) : 0;
+      const ctl = Array.from(root.querySelectorAll("input:not([type=hidden]), select, button, .checkbox-container")).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+      const names = Array.from(root.querySelectorAll(".setting-item-name")).filter((e) => e.getBoundingClientRect().width > 0);
+      const cut = names.filter((e) => e.scrollWidth > e.clientWidth + 1);
+      const col = root.getBoundingClientRect();
+      return { rows: rows.length, vw, maxRight, overflow: root.scrollWidth > root.clientWidth + 1, sw: root.scrollWidth, cw: root.clientWidth, colW: Math.round(col.width), minCtl: ctl.length ? Math.min(...ctl.map((b) => b.height)) : 0, cut: cut.length, names: names.length, cutSample: cut.slice(0, 2).map((e) => e.textContent), hoehe: Math.ceil(col.top + root.scrollHeight + 40) };
+    `;
+    type KMass = { rows: number; vw: number; maxRight: number; overflow: boolean; sw: number; cw: number; colW: number; minCtl: number; cut: number; names: number; cutSample: string[]; hoehe: number };
+    // Die Einstellungen sind höher als das Fenster: erst die nötige Höhe messen, dann in dieser Höhe messen und aufnehmen (Breite bleibt 390 px).
+    const kLauf = async (name: string, scale: number): Promise<KMass | null> => {
+      const hoehe = await withMetrics(kCdp, 390, 3000, async () => { await sleep(800); return (await kCdp.evaluate<KMass | null>(kMessen))?.hoehe ?? 0; });
+      const h = Math.min(Math.max(hoehe, 844), 8000);
+      return withMetrics(kCdp, 390, h, async () => {
+        await sleep(1200);
+        const m = await kCdp.evaluate<KMass | null>(kMessen);
+        if (shots && m) {
+          writeFileSync(join(shots, name), await capture(kCdp, { x: 0, y: 0, width: 390, height: h }, scale));
+          console.log(`  Bild: ${join(shots, name)} (Höhe ${h} px${hoehe > h ? `, gekürzt von ${hoehe}` : ""})`);
+        }
+        return m;
+      });
+    };
+    const kZu = await kLauf("settings-390.png", 2);
+    // Alle Gruppen aufklappen: das ist der strengere Fall für Zeilen mit Zahlenfeldern, Ersetzungsregeln und Wertlisten.
+    await kCdp.evaluate(`document.querySelectorAll(".okit-collapsible.is-collapsed .okit-collapsible-title").forEach((t) => t.click()); await new Promise((r) => setTimeout(r, 600)); return true;`);
+    const kUnaufgeklappt = await kCdp.evaluate<number>(`return document.querySelectorAll(".okit-collapsible.is-collapsed").length;`);
+    const kOffen = await kLauf("settings-390-offen.png", 1);
+    if (kOwnWindow) kCdp.close();
+    await schliesseEinstellungen(cdp).catch(() => undefined);
+    const kOk = (m: KMass | null): boolean => m !== null && m.rows > 0 && m.vw === 390 && !m.overflow && m.maxRight <= m.vw + 1;
+    const kText = (m: KMass | null): string => (m ? `Fenster ${m.vw} px, Spalte ${m.colW} px, Zeilen=${m.rows}, Überlauf=${m.overflow} (${m.sw}/${m.cw}), rechte Kante ${Math.round(m.maxRight)}/${m.vw}, kleinstes Bedienelement ${Math.round(m.minCtl)} px, abgeschnittene Namen ${m.cut}/${m.names} ${q(m.cutSample)}` : "nichts gemessen");
+    record("K Einstellungen bei 390 px: kein seitliches Überlaufen, auch mit allen Gruppen aufgeklappt", kOk(kZu) && kOk(kOffen) && kUnaufgeklappt === 0 && (kOffen?.rows ?? 0) > (kZu?.rows ?? 0), `eingeklappt: ${kText(kZu)}; aufgeklappt (noch zu: ${kUnaufgeklappt}): ${kText(kOffen)}`);
 
     // --- S7 / J ---
     console.log("\nS7 · Startscan mit Massendateien");
