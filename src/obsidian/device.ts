@@ -17,7 +17,8 @@ export function createDeviceState(app: App, random: () => number = Math.random):
   return {
     get repairs(): boolean {
       const v = read(KEY_REPAIRS);
-      return typeof v === "boolean" ? v : !Platform.isMobile;
+      // Als Text gespeichert: Obsidian verwirft `false` beim Speichern (gemessen 1.15.1), „aus“ ginge verloren und der Vorgabewert (am Desktop „an“) käme zurück. Ein früher gespeichertes `true` gilt weiter.
+      return v === "off" ? false : v === "on" || v === true ? true : !Platform.isMobile;
     },
     get name(): string {
       const v = read(KEY_NAME);
@@ -34,7 +35,7 @@ export function createDeviceState(app: App, random: () => number = Math.random):
     saveSnapshot: (paths) => { write(KEY_SNAPSHOT, paths); },
     policyKey: () => { const v = read(KEY_POLICY); return typeof v === "string" ? v : null; },
     savePolicyKey: (key) => { write(KEY_POLICY, key); },
-    setRepairs: (on) => { write(KEY_REPAIRS, on); },
+    setRepairs: (on) => { write(KEY_REPAIRS, on ? "on" : "off"); },
     setName: (name) => { write(KEY_NAME, name.trim() === "" ? null : name.trim()); },
   };
 }

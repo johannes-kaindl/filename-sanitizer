@@ -8,6 +8,12 @@ function fakeApp() {
   return { store, app: { loadLocalStorage: (k: string) => store.get(k) ?? null, saveLocalStorage: (k: string, v: unknown) => { if (v === null) store.delete(k); else store.set(k, v); } } as unknown as App };
 }
 
+/** Wie Obsidian 1.15.1 gemessen (GUI-Smoke 2026-11-12): `saveLocalStorage(key, false)` speichert nichts, `loadLocalStorage` liefert danach `null`. */
+function obsidianLikeApp() {
+  const store = new Map<string, unknown>();
+  return { store, app: { loadLocalStorage: (k: string) => store.get(k) ?? null, saveLocalStorage: (k: string, v: unknown) => { if (v === null || v === false) store.delete(k); else store.set(k, v); } } as unknown as App };
+}
+
 describe("device state", () => {
   it("repairs on desktop and off on mobile by default", () => {
     const f = fakeApp();
@@ -19,7 +25,27 @@ describe("device state", () => {
   });
   it("explicit switch wins and is stored locally", () => {
     const f = fakeApp(); const d = createDeviceState(f.app);
-    d.setRepairs(false); expect(d.repairs).toBe(false); expect(f.store.get("filename-sanitizer-repairs")).toBe(false);
+    d.setRepairs(false); expect(d.repairs).toBe(false); expect(f.store.get("filename-sanitizer-repairs")).toBe("off");
+  });
+  it("switching repairs off survives a storage that drops false (desktop default is on)", () => {
+    const f = obsidianLikeApp();
+    (Platform as { isMobile: boolean }).isMobile = false;
+    const d = createDeviceState(f.app);
+    expect(d.repairs).toBe(true);
+    d.setRepairs(false);
+    expect(d.repairs).toBe(false);
+    expect(createDeviceState(f.app).repairs).toBe(false);
+    d.setRepairs(true);
+    expect(createDeviceState(f.app).repairs).toBe(true);
+  });
+  it("switching repairs on survives on mobile (default off), and an older stored true still reads as on", () => {
+    const f = obsidianLikeApp();
+    (Platform as { isMobile: boolean }).isMobile = true;
+    const d = createDeviceState(f.app);
+    expect(d.repairs).toBe(false);
+    d.setRepairs(true); expect(createDeviceState(f.app).repairs).toBe(true);
+    f.store.set("filename-sanitizer-repairs", true); expect(createDeviceState(f.app).repairs).toBe(true);
+    (Platform as { isMobile: boolean }).isMobile = false;
   });
   it("name is generated once, kept, and can be set", () => {
     const f = fakeApp(); const d = createDeviceState(f.app, () => 0.5);
