@@ -371,6 +371,8 @@ async function main(): Promise<void> {
 
     // --- S7 / J ---
     console.log("\nS7 · Startscan mit Massendateien");
+    // Die 245 ungültigen Namen müssen in der Prüfliste landen, nicht von der Automatik umbenannt werden (im vollen Lauf setzt H den Modus schon; im Abschnitt s7 fehlt H).
+    await tweak({ mode: "review" });
     for (let i = 0; i < BULK_VALID; i++) w(`bulk/n${String(i).padStart(5, "0")}.md`, "x\n");
     for (let i = 0; i < BULK_BAD; i++) w(`bulkbad/b: ${String(i).padStart(4, "0")}.md`, "x\n");
     // Warten auf den Indexstand statt auf eine feste Zeit: fertig, wenn die Dateizahl das Soll hat und über zwei Messungen gleich bleibt;
@@ -436,10 +438,10 @@ async function main(): Promise<void> {
       const vorher = scroller.scrollTop;
       const t0 = performance.now();
       btn.click();
-      // Neuzeichnen: der angeklickte Knopf ist ausgetauscht, sobald seine Karte neu gebaut wurde (Messung ohne die Wartezeit danach).
-      let neu = 0;
-      while (btn.isConnected && neu < 5000) { await new Promise((r) => setTimeout(r, 10)); neu = Math.round(performance.now() - t0); }
-      const neuMs = btn.isConnected ? -1 : neu;
+      // Der Handler zeichnet synchron im Klick neu: die Dauer des Klicks ist die Dauer des Neuzeichnens; läuft es asynchron, zählt der Austausch des Knopfs (Abtastung 10 ms).
+      let neu = performance.now() - t0;
+      while (btn.isConnected && neu < 5000) { await new Promise((r) => setTimeout(r, 10)); neu = performance.now() - t0; }
+      const neuMs = btn.isConnected ? -1 : Math.round(neu * 10) / 10;
       await new Promise((r) => setTimeout(r, 600));
       const a = document.activeElement;
       const c2 = a && a.closest ? a.closest("[data-id]") : null;
@@ -451,7 +453,7 @@ async function main(): Promise<void> {
       console.log(`  Bild: ${join(shots, "review-390-nach-ablehnen.png")}`);
     }
     record("M Prüfliste mit 245 Karten: Scrollposition und Fokus bleiben nach Ablehnen einer Karte", mm.ok && mm.vorher > 500 && Math.abs(mm.nachher - mm.vorher) <= 2 && mm.aktiv === mm.id && /okit-review-reject/.test(mm.knopf ?? "") && mm.karten >= BULK_BAD,
-      `Karten=${mm.karten}, Scroll vorher ${mm.vorher} → nachher ${mm.nachher}, Karte ${q(mm.id)} → Fokus auf ${q(mm.aktiv)} (${q(mm.knopf)}), Klick bis die Karte neu gebaut ist ${mm.ms} ms (Abtastung 10 ms, -1 = nicht innerhalb 5 s)`);
+      `Karten=${mm.karten}, Scroll vorher ${mm.vorher} → nachher ${mm.nachher}, Karte ${q(mm.id)} → Fokus auf ${q(mm.aktiv)} (${q(mm.knopf)}), Klick bis die Karte neu gebaut ist ${mm.ms} ms (-1 = nicht innerhalb 5 s)`);
   } finally {
     await zustand.schliesse();
     if (istAbgebrochen()) return;
