@@ -4,13 +4,13 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 
 **Profil:** `ts-node` · `obsidian-plugin`.
 
-**Stand 2026-11-11: 0.1.0 veröffentlicht (Tag 0.1.0, Store: Passed · Excellent, laut Cockpit).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke 14 von 14 auf Obsidian 1.15.1 (`docs/SMOKE.md`), Docs-Lint und README-Bilder (`scripts/shots.ts`) ohne Befund. Offen: Sync-Messungen S2 und S4 mit zweitem Gerät, die Einstellungen im schmalen Fenster am iPhone (Cockpit-Tasks). Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14).
+**Stand 2026-11-11: 0.1.0 veröffentlicht (Tag 0.1.0, Store: Passed · Excellent, laut Cockpit).** Plan-Tasks 3 bis 12 umgesetzt, Gate grün, GUI-Smoke 14 von 14 auf Obsidian 1.15.1 (`docs/SMOKE.md`), Docs-Lint und README-Bilder (`scripts/shots.ts`) ohne Befund. Offen: Sync-Messungen S2 und S4 mit zweitem Gerät, die Einstellungen im schmalen Fenster am iPhone (Cockpit-Tasks). Spec und Plan liegen im Coding-Cockpit (`25_Coding/filename-sanitizer/_SDD/`, CORE-META-14). Seit 2026-11-12 liegen auf `main` ungetaggte Änderungen (Welle 33): späte Bestätigung des Link-Dialogs, alle acht Protokollereignisse, geprüfte Einstellungen, Fokus und Aufklappzustand, Gerätewert „aus“ am Desktop; GUI-Smoke jetzt 18 Punkte.
 
 ## Project character
 
 **Projekt:** `filename-sanitizer` — Obsidian-Plugin, das Dateinamen mit Zeichen, die Sync oder Links ablehnen (`: ? * " < > | \ / # ^ [ ]`), nach einstellbaren Regeln repariert, jede Änderung protokolliert und schreibenden Plugins eine API (`sanitizeName`, `checkName`) anbietet. Es benennt nur mit `app.fileManager.renameFile` um und überschreibt und löscht nie. Autor: Johannes Kaindl.
 
-**Kit-first-Befund:** Die Regeln liegen als reine Funktionen in `code-kit` (`filename-policy`), der API-Vertrag und der Schreiber-Baustein `safeFileName` in `obsidian-kit` (`filename-sanitizer-source`, `safe-file-name`). Aus code-kit 0.63.0 kommen außerdem `matchIgnoreChain`, `exactIgnoreLine` („Immer so lassen“, bei `null` legt der Knopf nichts an und meldet es), `createRepeatGuard` (3 Reparaturen je Quellpfad in 10 Minuten) und `affixDiffSegments`. Das Plugin besitzt Einstellungen, Reparatur, Prüfliste, Protokoll und die API.
+**Kit-first-Befund:** Die Regeln liegen als reine Funktionen in `code-kit` (`filename-policy`), der API-Vertrag und der Schreiber-Baustein `safeFileName` in `obsidian-kit` (`filename-sanitizer-source`, `safe-file-name`). Aus code-kit 0.63.0 (`filename-policy` seit 0.64.0 als Einzelpin, mit `checkFolderPath` für den Protokollordner) kommen außerdem `matchIgnoreChain`, `exactIgnoreLine` („Immer so lassen“, bei `null` legt der Knopf nichts an und meldet es), `createRepeatGuard` (3 Reparaturen je Quellpfad in 10 Minuten) und `affixDiffSegments`. Das Plugin besitzt Einstellungen, Reparatur, Prüfliste, Protokoll und die API.
 
 ## Architecture principles
 
@@ -42,7 +42,7 @@ fixtures/vault/             Fixture für den GUI-Smoke
 ## Commands
 
 - `npm run gate` — lint + typecheck + typecheck:test + typecheck:scripts + test + check:pure + build; Pflicht vor jedem Commit.
-- `npm run smoke:gui -- --setup` baut den Staging-Vault, `npm run smoke:gui -- --port <Port> [--shots <Ordner>]` fährt den Smoke gegen die Zweitinstanz (Rezept im Dateikopf von `scripts/gui-smoke.ts`).
+- `npm run smoke:gui -- --setup` baut den Staging-Vault, `--abschnitt s7` fährt nur Grundlage, Gerätewert, Startscan und die 245 Karten, `npm run smoke:gui -- --port <Port> [--shots <Ordner>]` fährt den Smoke gegen die Zweitinstanz (Rezept im Dateikopf von `scripts/gui-smoke.ts`).
 - `npm run shots -- --setup` und `npm run shots -- --port <Port>` nehmen die README-Bilder in `docs/images/` auf (Zweitinstanz, Rezept im Dateikopf von `scripts/shots.ts`, Vertrag `docs/images/README.md`); `npm run shots:check` prüft den Bild-Standard.
 - `sh tools/sync-kit.sh [--check]` — Kit-Vendoring aus `../obsidian-kit` und `../../libs/code-kit`.
 - `node ../tools/css_baseline/check.mjs styles.css` — CSS-Baseline (sobald es `styles.css` gibt).
@@ -59,10 +59,11 @@ fixtures/vault/             Fixture für den GUI-Smoke
 
 ## Gotchas
 
-- **Bei `alwaysUpdateLinks` aus öffnet `renameFile` je Datei einen Dialog „Update links“, und alle weiteren Aufrufe warten dahinter** (gemessen 2026-11-08, Obsidian 1.15.1). Darum läuft die Automatik nur bei `app.vault.getConfig("alwaysUpdateLinks") === true`, für jede Endung (S5: die Endung ändert am Dialog nichts; gemessen nur an 1.15.1, `minAppVersion` 1.15.0 ungemessen; öffentlich ist 1.15.0, 1.15.1 nur Beta, Entscheidung Johannes 2026-11-09), strikt nacheinander und mit Frist von 10000 ms; nach einer abgelaufenen Frist hält sie bis zum nächsten Start an.
+- **Bei `alwaysUpdateLinks` aus öffnet `renameFile` je Datei einen Dialog „Update links“, und alle weiteren Aufrufe warten dahinter** (gemessen 2026-11-08, Obsidian 1.15.1). Darum läuft die Automatik nur bei `app.vault.getConfig("alwaysUpdateLinks") === true`, für jede Endung (S5: die Endung ändert am Dialog nichts; gemessen nur an 1.15.1, `minAppVersion` 1.15.0 ungemessen; öffentlich ist 1.15.0, 1.15.1 nur Beta, Entscheidung Johannes 2026-11-09), strikt nacheinander und mit Frist von 10000 ms; nach einer abgelaufenen Frist hält sie bis zum nächsten Start an, eine später im Dialog bestätigte Umbenennung wird trotzdem protokolliert und gibt ihren Zielpfad frei.
 - **Eine Regeländerung macht Bestand zu Altbestand:** `RepairEngine.policyChanged()` (aus `saveSettings`) und der Start nehmen neu ungültige Namen in den Schnappschuss auf, sobald sich `JSON.stringify(settings.policy)` vom gespeicherten Stand unterscheidet; die Automatik fasst nur neue oder umbenannte Dateien an (Entscheidung 2026-11-08).
 - **Ein Name mit `\` ist für Obsidian unsichtbar** (nicht im Index, kein Ereignis); das Plugin kann ihn nicht reparieren.
 - **Geräteeigene Werte** (Schalter „Dieses Gerät repariert“, Gerätename, Schnappschuss des Altbestands, Stand der Richtlinie) liegen nur in `app.loadLocalStorage`/`saveLocalStorage`, nie in `data.json`, weil diese mitsynchronisiert wird.
+- **Obsidians `saveLocalStorage(key, false)` speichert nichts** (gemessen 2026-11-12, Obsidian 1.15.1: danach liest `loadLocalStorage` `null`; `true` und Text bleiben). Ein Gerätewert, der aus sein kann, wird als Text gespeichert (`on`/`off`, Aufklappzustand `open`/`closed`), nie als Boolean.
 - **Typname im Kit:** `FilenameHit` (nicht `Hit`); der API-Fehlertyp im Kit-Barrel heißt `FilenameSanitizerApiError`; `maxBytes` ist gültig bei 0 oder 32 bis 255; ein leerer Name aus dem Plugin löst den Rückfall in `safeFileName` aus.
 
 - **Ein Desktop-Fenster mit 390 px ist kein Handy.** Die Seitenleisten behalten ihre Breite und lassen der Ansicht 22 px (Smoke-Messung 1, 2026-11-08); der Treiber klappt sie vor der 390-px-Messung ein.

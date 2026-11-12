@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The log now records *Confirmed* when you rename from the review list and *Skipped* for entries you left unticked, writes *Collision* whenever a taken name forced a number, and fills in how many links pointed at a renamed file or folder.
+
+### Changed
+
+- The log folder and the number fields are checked when you leave the field: an invalid folder name (for example `a:b`, an empty or hidden segment) and values such as a quiet time of 0 are refused with a message instead of being saved or silently replaced.
+- The review list keeps its scroll position and keyboard focus when you tick, untick or reject an entry, and the settings groups you opened stay open after a reset and when you reopen the settings.
+
+### Fixed
+
+- Switching *This device repairs* off on a desktop now sticks; before, Obsidian's local storage dropped the stored "off" and the switch came back on.
+- A rename whose *Update links* dialog was confirmed only after the 10-second limit is now written to the log, and its target path is released again instead of staying reserved until restart.
+
 ## [0.1.0] — 2026-11-09
 
 ### Added
