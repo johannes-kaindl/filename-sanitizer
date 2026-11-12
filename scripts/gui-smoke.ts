@@ -4,6 +4,9 @@
  *
  * ## Zweitinstanz (eigenes Profil, eigener Port — NICHT die reguläre Instanz anfassen; `--port` ist Pflicht)
  *
+ * Ein Aufruf statt der Schritte unten: `tools/obsidian-cdp/messlauf.sh` im Dach (Rezept und Lock im Kopf der Datei; `SMOKE_ARGS="--shots <Ordner>"` für Bilder, `SMOKE_ARGS="--abschnitt s7"` für die lange Messung allein).
+ * Die Schritte von Hand:
+ *
  *   npm run build && npm run smoke:gui -- --setup
  *   UD=<Profilordner>; mkdir -p "$UD"; cp ~/Library/Application\ Support/obsidian/obsidian-*.asar "$UD"/
  *   node -e 'require("fs").writeFileSync(process.argv[1]+"/obsidian.json",JSON.stringify({vaults:{"fsan":{path:process.argv[2],ts:Date.now(),open:true}},language:"en"}))' "$UD" "$(node -e 'console.log(process.env.STAGING_VAULTS_DIR+"/filename-sanitizer")')"
@@ -19,7 +22,7 @@ import { dirname, join } from "node:path";
 import { cwd } from "node:process";
 
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
-import { Cdp, attachTo, beimAbbruch, bereiteInstanzVor, clearNotices, istAbgebrochen, notices, pollUntil, requireVisible, schliesseEinstellungen } from "../../tools/obsidian-cdp/cdp.js";
+import { Cdp, attachTo, beimAbbruch, bereiteInstanzVor, clearNotices, istAbgebrochen, notices, pollUntil, requireVisible, schliesseDialog, schliesseEinstellungen } from "../../tools/obsidian-cdp/cdp.js";
 import { capture, setWindowSize, withMetrics } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, requireEigenerBuild, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
@@ -33,6 +36,7 @@ const BULK_BAD = 245;
 
 const PUNKTE = [
   "0 Plugin geladen (Restricted-Mode-Guard)",
+  "O Gerätewert: Der Schalter „Dieses Gerät repariert“ bleibt nach dem Ausschalten aus (Obsidians lokaler Speicher verwirft ein gespeichertes false)",
   "A Altbestand beim ersten Start unberührt und in der Prüfliste",
   "B Extern angelegtes „c1: rest.md“ wird nach der Ruhezeit „c1 — rest.md“, Link und Alias folgen, Kontrolldatei bleibt; eine Datei mit beliebiger Endung („c2: fremd.foo“) wird ebenso repariert",
   "C Ausnahme-Ordner bleibt, derselbe Name außerhalb wird repariert",
@@ -41,14 +45,20 @@ const PUNKTE = [
   "E Mehrere Reparaturen ergeben ein gebündeltes Popup",
   "F Das Protokoll (.jsonl) enthält die Zeile, die Kontrolldatei nicht",
   "G app.plugins.plugins[…].api antwortet (sanitizeName, checkName, Fehlerwert)",
-  "H Haken weg lässt die Datei stehen, der angehakte Eintrag wird umbenannt",
+  "L Eine Umbenennung, deren Dialog „Update links“ erst nach der Frist bestätigt wird, kommt ins Protokoll, der eigene Zielpfad wird frei, die Automatik bleibt angehalten",
+  "H Haken weg lässt die Datei stehen, der angehakte Eintrag wird umbenannt; das Protokoll nennt bestätigt und übersprungen",
   "I Einstellungen: Hilfe-Zeile zuerst, Gruppen in der Reihenfolge der Spec",
   "K Einstellungen bei 390 px: kein seitliches Überlaufen, auch mit allen Gruppen aufgeklappt",
+  "N Einstellungen: aufgeklappte Gruppen bleiben nach einem Zurücksetzen und nach dem Wiederöffnen offen",
   "S7 Startscan bei 17.000 Dateien (Dauer gemessen)",
   "J Ansicht bei 390 px: 245 Karten, kein seitliches Überlaufen, Knöpfe greifbar",
+  "M Prüfliste mit 245 Karten: Scrollposition und Fokus bleiben nach Ablehnen einer Karte",
 ] as const;
 
-const bilanz = createBilanz({ punkte: PUNKTE });
+// `--abschnitt s7`: nur Grundlage, Startscan und die 390-px-Ansicht (für Wiederholungen der langsamen Messung, ohne Einstellungen zu öffnen); die Teilmenge ist das Soll.
+const NUR_S7 = parseArgs(process.argv.slice(2)).value("abschnitt") === "s7";
+const SOLL = (NUR_S7 ? PUNKTE.filter((p) => /^(0|O|S7|J|M) /.test(p)) : PUNKTE) as unknown as typeof PUNKTE;
+const bilanz = createBilanz({ punkte: SOLL });
 const { record } = bilanz;
 const q = (s: unknown): string => JSON.stringify(s);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -117,6 +127,23 @@ async function main(): Promise<void> {
     const geladen = (await cdp.evaluate<{ g: boolean }>(`return { g: Boolean(${P}) };`)).g;
     record("0 Plugin geladen (Restricted-Mode-Guard)", geladen, geladen ? `Vault ${info.name} (${klar.hinweis})` : `${PLUGIN_ID} fehlt — ${klar.hinweis}`);
     if (!geladen) throw new Error("Ohne geladenes Plugin ist jeder weitere Punkt gegenstandslos.");
+
+    // --- O ---
+    console.log("\nO · Gerätewert");
+    const o = await cdp.evaluate<{ vorher: unknown; aus: unknown; roh: unknown; wieder: unknown }>(`
+      const d = ${P}.device;
+      const vorher = d.repairs;
+      d.setRepairs(false);
+      const aus = d.repairs;
+      const roh = app.loadLocalStorage("filename-sanitizer-repairs");
+      app.saveLocalStorage("filename-sanitizer-repairs", null);
+      return { vorher, aus, roh, wieder: d.repairs };
+    `);
+    record("O Gerätewert: Der Schalter „Dieses Gerät repariert“ bleibt nach dem Ausschalten aus (Obsidians lokaler Speicher verwirft ein gespeichertes false)", o.vorher === true && o.aus === false && o.wieder === true,
+      `Vorgabe=${q(o.vorher)}, nach setRepairs(false)=${q(o.aus)}, gespeicherter Rohwert=${q(o.roh)}, nach Zurücksetzen=${q(o.wieder)}`);
+
+    abschnitt: {
+    if (NUR_S7) break abschnitt;
 
     // --- A ---
     console.log("\nA · Altbestand");
@@ -195,14 +222,50 @@ async function main(): Promise<void> {
     const lines = existsSync(logDir) ? readdirSync(logDir).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readFileSync(join(logDir, f), "utf8").split("\n").filter(Boolean)) : [];
     const parsed = lines.map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } });
     const rest = parsed.find((l) => l?.oldPath === "c1: rest.md");
-    record("F Das Protokoll (.jsonl) enthält die Zeile, die Kontrolldatei nicht", Boolean(rest) && rest?.event === "repariert" && rest?.v === 1 && !parsed.some((l) => l === null) && !parsed.some((l) => l?.oldPath === "kontrolle.md"),
-      `Zeilen=${lines.length}, Zeile c1=${q(rest ? { event: rest.event, newPath: rest.newPath, trigger: rest.trigger } : null)}`);
+    record("F Das Protokoll (.jsonl) enthält die Zeile, die Kontrolldatei nicht", Boolean(rest) && rest?.event === "repariert" && rest?.v === 1 && !parsed.some((l) => l === null) && !parsed.some((l) => l?.oldPath === "kontrolle.md") && parsed.some((l) => l?.event === "bestätigt" && l?.oldPath === "d: link.md" && l?.trigger === "list"),
+      `Zeilen=${lines.length}, bestätigt(d)=${parsed.some((l) => l?.event === "bestätigt" && l?.oldPath === "d: link.md")}, Zeile c1=${q(rest ? { event: rest.event, newPath: rest.newPath, trigger: rest.trigger } : null)}`);
 
     // --- G ---
     console.log("\nG · API");
     const g = await cdp.evaluate<{ s: unknown; c: unknown; bad: unknown; sync: boolean }>(`const a = ${P}.api; const r = a.sanitizeName("a: b.md", { caller: "smoke" }); return { s: r, c: a.checkName("ok.md"), bad: a.sanitizeName("a: b.md", { caller: "" }), sync: !(r instanceof Promise) };`);
     const gs = g.s as { name?: string; changed?: boolean };
     record("G app.plugins.plugins[…].api antwortet (sanitizeName, checkName, Fehlerwert)", gs.name === "a — b.md" && gs.changed === true && (g.c as { valid?: boolean }).valid === true && (g.bad as { error?: string }).error === "invalid-input" && g.sync, `sanitize=${q(gs)}, check=${q(g.c)}, leerer caller=${q(g.bad)}`);
+
+    // --- L ---
+    // Der Dialog „Update links“ entsteht echt: die Link-Einstellung ist aus, nur die Entscheidung der Automatik wird auf „an“ gestellt (Instanzfeld über die Klasse), Obsidians renameFile liest die echte Einstellung.
+    console.log("\nL · Späte Bestätigung nach der Frist");
+    await cdp.evaluate(`app.vault.setConfig("alwaysUpdateLinks", false); ${P}.engine.linkAuto = () => true; return true;`);
+    w("Links3.md", "[[l1: spaet]]\n"); await sleep(1500);
+    w("l1: spaet.md", "# spaet\n");
+    const dialogOffen = await pollUntil<boolean>(cdp, `return Array.from(document.querySelectorAll(".modal")).some((m) => /Update links/i.test(m.textContent || "")) ? true : null;`, QUIET_MS + 8000, 200);
+    const angehalten = await pollUntil<boolean>(cdp, `return ${P}.engine.halted === true ? true : null;`, 16000, 300);
+    const ownVor = await cdp.evaluate<string[]>(`return Array.from(${P}.engine.ownTargets);`);
+    // Die Datei trägt den neuen Namen schon, renameFile wartet auf die Antwort im Dialog (Messung S5, fertigInMs=null): erst die Antwort beendet es.
+    const antwort = await cdp.evaluate<{ texte: string[]; geklickt: string | null }>(`
+      const m = Array.from(document.querySelectorAll(".modal")).find((x) => /Update links/i.test(x.textContent || ""));
+      if (!m) return { texte: [], geklickt: null };
+      const bs = Array.from(m.querySelectorAll("button"));
+      const wahl = bs.find((b) => /^update links?$/i.test((b.textContent || "").trim())) || bs.find((b) => b.classList.contains("mod-cta"));
+      const texte = bs.map((b) => (b.textContent || "").trim());
+      if (wahl) wahl.click();
+      return { texte, geklickt: wahl ? (wahl.textContent || "").trim() : null };
+    `);
+    let frei = await pollUntil<boolean>(cdp, `return ${P}.engine.ownTargets.size === 0 ? true : null;`, 8000, 250);
+    let geschlossenMit = antwort.geklickt === null ? "kein Knopf gefunden" : `Knopf ${q(antwort.geklickt)}`;
+    if (frei === null) { await schliesseDialog(cdp); geschlossenMit += ", danach Dialog geschlossen"; frei = await pollUntil<boolean>(cdp, `return ${P}.engine.ownTargets.size === 0 ? true : null;`, 8000, 250); }
+    const spaetDa = await wait(() => has("l1 — spaet.md") && !has("l1: spaet.md"), 4000);
+    await sleep(1000);
+    const dialogNach = await cdp.evaluate<number>(`return Array.from(document.querySelectorAll(".modal")).filter((x) => /Update links/i.test(x.textContent || "")).length;`);
+    const ownNach = await cdp.evaluate<string[]>(`return Array.from(${P}.engine.ownTargets);`);
+    const lLog = await cdp.evaluate<{ event: string; oldPath: string; message?: string }[]>(`return (await ${P}.logStore.read(500)).filter((e) => e.oldPath === "l1: spaet.md").map((e) => ({ event: e.event, oldPath: e.oldPath, message: e.message }));`);
+    const stillHalted = await cdp.evaluate<boolean>(`return ${P}.engine.halted === true;`);
+    const linkBody = readFileSync(join(vaultDir, "Links3.md"), "utf8").trim();
+    // Zustand zurück: Automatik wieder frei, Link-Einstellung an.
+    await cdp.evaluate(`delete ${P}.engine.linkAuto; ${P}.engine.halted = false; app.vault.setConfig("alwaysUpdateLinks", true); return true;`);
+    record("L Eine Umbenennung, deren Dialog „Update links“ erst nach der Frist bestätigt wird, kommt ins Protokoll, der eigene Zielpfad wird frei, die Automatik bleibt angehalten",
+      dialogOffen === true && angehalten === true && ownVor.includes("l1 — spaet.md") && spaetDa && frei === true && dialogNach === 0 && ownNach.length === 0 && stillHalted
+        && lLog.some((e) => e.event === "fehlgeschlagen") && lLog.some((e) => e.event === "repariert" && /after the 10000 ms deadline/.test(e.message ?? "")),
+      `Dialog=${dialogOffen}, Knöpfe=${q(antwort.texte)}, beantwortet mit ${geschlossenMit}, angehalten nach Frist=${angehalten}, ownTargets vor Bestätigung=${q(ownVor)}, nach=${q(ownNach)} (frei=${frei}), Dialog danach offen=${dialogNach}, umbenannt=${spaetDa}, Link=${q(linkBody)}, Protokoll=${q(lLog)}`);
 
     // --- H ---
     console.log("\nH · Haken weg");
@@ -217,7 +280,9 @@ async function main(): Promise<void> {
     const h1 = await wait(() => has("h1 — x.md"), 8000);
     await sleep(800);
     const stays = await cdp.evaluate<string>(`const c = document.querySelector('.okit-review-card[data-id="h2: x.md"]'); return c ? c.textContent : "";`);
-    record("H Haken weg lässt die Datei stehen, der angehakte Eintrag wird umbenannt", h1 && has("h2: x.md") && /Stays as it is/.test(stays) && !has("h1: x.md"), `h1 umbenannt=${h1}, h2 liegt=${has("h2: x.md")}, Karte h2=${q(stays.slice(0, 80))}`);
+    const hLog = await cdp.evaluate<{ event: string; oldPath: string }[]>(`return (await ${P}.logStore.read(500)).filter((e) => /^h\\d: x/.test(e.oldPath)).map((e) => ({ event: e.event, oldPath: e.oldPath }));`);
+    const hHat = (event: string, oldPath: string): boolean => hLog.some((e) => e.event === event && e.oldPath === oldPath);
+    record("H Haken weg lässt die Datei stehen, der angehakte Eintrag wird umbenannt; das Protokoll nennt bestätigt und übersprungen", h1 && has("h2: x.md") && /Stays as it is/.test(stays) && !has("h1: x.md") && hHat("bestätigt", "h1: x.md") && hHat("repariert", "h1: x.md") && hHat("übersprungen", "h2: x.md") && !hHat("bestätigt", "h2: x.md"), `h1 umbenannt=${h1}, h2 liegt=${has("h2: x.md")}, Karte h2=${q(stays.slice(0, 80))}, Protokoll=${q(hLog)}`);
 
     // --- I ---
     console.log("\nI · Einstellungen");
@@ -279,22 +344,55 @@ async function main(): Promise<void> {
     await kCdp.evaluate(`document.querySelectorAll(".okit-collapsible.is-collapsed .okit-collapsible-title").forEach((t) => t.click()); await new Promise((r) => setTimeout(r, 600)); return true;`);
     const kUnaufgeklappt = await kCdp.evaluate<number>(`return document.querySelectorAll(".okit-collapsible.is-collapsed").length;`);
     const kOffen = await kLauf("settings-390-offen.png", 1);
+    // N: ein Zurücksetzen (Ersetzungsregel, zeichnet die Einstellungen neu) und das Wiederöffnen dürfen die offenen Gruppen nicht zuklappen.
+    // Sonde: überlebt ein gespeichertes `false` im lokalen Speicher? (Ursache für ein Zuklappen trotz gespeichertem Zustand)
+    const nSonde = await cdp.evaluate<{ falsch: unknown; wahr: unknown; text: unknown }>(`app.saveLocalStorage("filename-sanitizer-sonde", false); const falsch = app.loadLocalStorage("filename-sanitizer-sonde"); app.saveLocalStorage("filename-sanitizer-sonde", true); const wahr = app.loadLocalStorage("filename-sanitizer-sonde"); app.saveLocalStorage("filename-sanitizer-sonde", "open"); const text = app.loadLocalStorage("filename-sanitizer-sonde"); app.saveLocalStorage("filename-sanitizer-sonde", null); return { falsch, wahr, text };`);
+    const nGespeichert = await cdp.evaluate<Record<string, unknown>>(`return { replacements: app.loadLocalStorage("filename-sanitizer-fold-replacements"), log: app.loadLocalStorage("filename-sanitizer-fold-log"), advanced: app.loadLocalStorage("filename-sanitizer-fold-advanced") };`);
+    const nVorReset = await kCdp.evaluate<number>(`return document.querySelectorAll(".okit-collapsible.is-collapsed").length;`);
+    const nReset = await kCdp.evaluate<boolean>(`const sec = Array.from(document.querySelectorAll(".okit-collapsible")).find((x) => /replacement/i.test(((x.querySelector(".okit-collapsible-title") || {}).textContent || "").trim())); const b = sec ? sec.querySelector(".extra-setting-button") : null; if (b) b.click(); await new Promise((r) => setTimeout(r, 1200)); return Boolean(b);`);
+    const nNachReset = await kCdp.evaluate<{ zu: number; gruppen: number }>(`return { zu: document.querySelectorAll(".okit-collapsible.is-collapsed").length, gruppen: document.querySelectorAll(".okit-collapsible").length };`);
     if (kOwnWindow) kCdp.close();
     await schliesseEinstellungen(cdp).catch(() => undefined);
+    await cdp.evaluate(`app.setting.open(); await new Promise((r) => setTimeout(r, 500)); app.setting.openTabById(${q(PLUGIN_ID)}); await new Promise((r) => setTimeout(r, 1200)); return true;`);
+    let nCdp: Cdp = cdp; let nOwn = false;
+    if (!(await cdp.evaluate<boolean>(`return Boolean(document.querySelector(".modal.mod-settings"));`))) { const win = await attachTo("settings", port, REPO_NAME); if (win) { nCdp = win; nOwn = true; } }
+    const nWieder = await nCdp.evaluate<{ zu: number; gruppen: number }>(`return { zu: document.querySelectorAll(".okit-collapsible.is-collapsed").length, gruppen: document.querySelectorAll(".okit-collapsible").length };`);
+    // Zustand zurück: die Gruppen wieder einklappen (lokaler Speicher), damit der nächste Lauf wie ein erster beginnt.
+    await nCdp.evaluate(`document.querySelectorAll(".okit-collapsible:not(.is-collapsed) .okit-collapsible-title").forEach((t) => t.click()); return true;`);
+    if (nOwn) nCdp.close();
+    await schliesseEinstellungen(cdp).catch(() => undefined);
+    record("N Einstellungen: aufgeklappte Gruppen bleiben nach einem Zurücksetzen und nach dem Wiederöffnen offen", nReset && nVorReset === 0 && nNachReset.gruppen === 3 && nNachReset.zu === 0 && nWieder.gruppen === 3 && nWieder.zu === 0,
+      `Speicher-Sonde false→${q(nSonde.falsch)}, true→${q(nSonde.wahr)}, "open"→${q(nSonde.text)}; gespeichert=${q(nGespeichert)}; vor dem Zurücksetzen zu=${nVorReset}, Knopf gefunden=${nReset}, danach zu=${nNachReset.zu}/${nNachReset.gruppen}, nach Wiederöffnen zu=${nWieder.zu}/${nWieder.gruppen}`);
     const kOk = (m: KMass | null): boolean => m !== null && m.rows > 0 && m.vw === 390 && !m.overflow && m.maxRight <= m.vw + 1;
     const kText = (m: KMass | null): string => (m ? `Fenster ${m.vw} px, Spalte ${m.colW} px, Zeilen=${m.rows}, Überlauf=${m.overflow} (${m.sw}/${m.cw}), rechte Kante ${Math.round(m.maxRight)}/${m.vw}, kleinstes Bedienelement ${Math.round(m.minCtl)} px, abgeschnittene Namen ${m.cut}/${m.names} ${q(m.cutSample)}` : "nichts gemessen");
     record("K Einstellungen bei 390 px: kein seitliches Überlaufen, auch mit allen Gruppen aufgeklappt", kOk(kZu) && kOk(kOffen) && kUnaufgeklappt === 0 && (kOffen?.rows ?? 0) > (kZu?.rows ?? 0), `eingeklappt: ${kText(kZu)}; aufgeklappt (noch zu: ${kUnaufgeklappt}): ${kText(kOffen)}`);
+
+    }
 
     // --- S7 / J ---
     console.log("\nS7 · Startscan mit Massendateien");
     for (let i = 0; i < BULK_VALID; i++) w(`bulk/n${String(i).padStart(5, "0")}.md`, "x\n");
     for (let i = 0; i < BULK_BAD; i++) w(`bulkbad/b: ${String(i).padStart(4, "0")}.md`, "x\n");
-    const indexed = await pollUntil<number>(cdp, `const n = app.vault.getFiles().length; return n >= ${BULK_VALID + BULK_BAD} ? n : null;`, 420000, 2000);
+    // Warten auf den Indexstand statt auf eine feste Zeit: fertig, wenn die Dateizahl das Soll hat und über zwei Messungen gleich bleibt;
+    // abgebrochen wird nur, wenn sich die Zahl 120 s lang nicht bewegt (Obergrenze 30 Minuten). Belege für die feste Zeit: 17.069 und 15.555 von 17.245 nach 420 s.
+    const t0Index = Date.now();
+    const indexed = await (async (): Promise<number | null> => {
+      let last = -1; let lastChange = Date.now(); let gleich = 0;
+      while (Date.now() - t0Index < 1800000) {
+        const n = await cdp.evaluate<number>(`return app.vault.getFiles().length;`);
+        if (n !== last) { last = n; lastChange = Date.now(); gleich = 0; } else gleich++;
+        if (n >= BULK_VALID + BULK_BAD && gleich >= 2) return n;
+        if (Date.now() - lastChange > 120000) return null;
+        await sleep(2000);
+      }
+      return null;
+    })();
+    const indexSekunden = Math.round((Date.now() - t0Index) / 1000);
     const runs: number[] = [];
     for (let i = 0; i < 3; i++) runs.push(await cdp.evaluate<number>(`const t = performance.now(); await ${P}.engine.scanNow(); return Math.round(performance.now() - t);`));
     const total = await cdp.evaluate<number>(`return app.vault.getFiles().length;`);
     const pend = await cdp.evaluate<number>(`return ${P}.engine.pending().length;`);
-    record("S7 Startscan bei 17.000 Dateien (Dauer gemessen)", indexed !== null && pend >= BULK_BAD, `Dateien im Index=${total}, Scan je Lauf=${runs.join("/")} ms, Prüfliste=${pend} Einträge`);
+    record("S7 Startscan bei 17.000 Dateien (Dauer gemessen)", indexed !== null && pend >= BULK_BAD, `Index nach ${indexSekunden} s, Dateien im Index=${total}, Scan je Lauf=${runs.join("/")} ms, Prüfliste=${pend} Einträge`);
 
     console.log("\nJ · 390 px");
     // Desktop-Fenster mit 390 px lässt den Seitenleisten fast die ganze Breite (Messung 1: Ansicht 22 px breit); ein Handy gibt dem Hauptbereich die ganze Breite.
@@ -302,7 +400,7 @@ async function main(): Promise<void> {
     await setWindowSize(cdp, 390, 844);
     await cdp.evaluate(`app.commands.executeCommandById(${q(`${PLUGIN_ID}:open-review-and-log`)}); return true;`);
     const t0 = Date.now();
-    const cards = await pollUntil<number>(cdp, `const n = document.querySelectorAll(".okit-review-card").length; return n >= ${BULK_BAD} ? n : null;`, 30000, 300);
+    const cards = await pollUntil<number>(cdp, `const n = document.querySelectorAll(".okit-review-card").length; return n >= ${BULK_BAD} ? n : null;`, 120000, 300);
     const renderMs = Date.now() - t0;
     await sleep(500);
     const m = await cdp.evaluate<{ overflow: boolean; sw: number; cw: number; maxRight: number; vw: number; minBtn: number; firstCardH: number }>(`
@@ -320,6 +418,36 @@ async function main(): Promise<void> {
       console.log(`  Bild: ${join(shots, "review-390.png")}`);
     }
     record("J Ansicht bei 390 px: 245 Karten, kein seitliches Überlaufen, Knöpfe greifbar", cards !== null && cards >= BULK_BAD && !m.overflow && m.maxRight <= m.vw + 1 && m.minBtn >= 28, `Karten=${cards}, Aufbau ${renderMs} ms, Überlauf=${m.overflow} (${m.sw}/${m.cw}), rechte Kante ${Math.round(m.maxRight)}/${m.vw}, kleinster Knopf ${Math.round(m.minBtn)} px, Kartenhöhe ${Math.round(m.firstCardH)} px`);
+
+    // --- M --- (die 245 Karten stehen noch in der Ansicht)
+    console.log("\nM · Scroll und Fokus bei 245 Karten");
+    const mm = await cdp.evaluate<{ ok: boolean; vorher: number; nachher: number; id: string; aktiv: string | null; knopf: string | null; karten: number; ms: number }>(`
+      const cards = Array.from(document.querySelectorAll(".okit-review-card")).filter((c) => c.offsetParent !== null);
+      if (cards.length < 150) return { ok: false, vorher: 0, nachher: 0, id: "", aktiv: null, knopf: null, karten: cards.length, ms: 0 };
+      let scroller = cards[0].parentElement;
+      while (scroller && !(scroller.scrollHeight > scroller.clientHeight + 50 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+      if (!scroller) return { ok: false, vorher: 0, nachher: 0, id: "", aktiv: null, knopf: null, karten: cards.length, ms: 0 };
+      scroller.scrollTop = Math.floor(scroller.scrollHeight * 0.4);
+      await new Promise((r) => setTimeout(r, 300));
+      const card = cards.find((c) => c.getBoundingClientRect().top > 100) || cards[120];
+      const id = card.getAttribute("data-id");
+      const btn = card.querySelector(".okit-review-reject");
+      btn.focus();
+      const vorher = scroller.scrollTop;
+      const t0 = performance.now();
+      btn.click();
+      await new Promise((r) => setTimeout(r, 900));
+      const a = document.activeElement;
+      const c2 = a && a.closest ? a.closest("[data-id]") : null;
+      return { ok: true, vorher, nachher: scroller.scrollTop, id, aktiv: c2 ? c2.getAttribute("data-id") : null, knopf: a ? a.className : null, karten: document.querySelectorAll(".okit-review-card").length, ms: Math.round(performance.now() - t0) };
+    `);
+    if (shots) {
+      const png = await capture(cdp);
+      writeFileSync(join(shots, "review-390-nach-ablehnen.png"), png);
+      console.log(`  Bild: ${join(shots, "review-390-nach-ablehnen.png")}`);
+    }
+    record("M Prüfliste mit 245 Karten: Scrollposition und Fokus bleiben nach Ablehnen einer Karte", mm.ok && mm.vorher > 500 && Math.abs(mm.nachher - mm.vorher) <= 2 && mm.aktiv === mm.id && /okit-review-reject/.test(mm.knopf ?? "") && mm.karten >= BULK_BAD,
+      `Karten=${mm.karten}, Scroll vorher ${mm.vorher} → nachher ${mm.nachher}, Karte ${q(mm.id)} → Fokus auf ${q(mm.aktiv)} (${q(mm.knopf)}), Klick bis gezeichnet ${mm.ms} ms`);
   } finally {
     await zustand.schliesse();
     if (istAbgebrochen()) return;
