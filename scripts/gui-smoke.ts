@@ -436,10 +436,14 @@ async function main(): Promise<void> {
       const vorher = scroller.scrollTop;
       const t0 = performance.now();
       btn.click();
-      await new Promise((r) => setTimeout(r, 900));
+      // Neuzeichnen: der angeklickte Knopf ist ausgetauscht, sobald seine Karte neu gebaut wurde (Messung ohne die Wartezeit danach).
+      let neu = 0;
+      while (btn.isConnected && neu < 5000) { await new Promise((r) => setTimeout(r, 10)); neu = Math.round(performance.now() - t0); }
+      const neuMs = btn.isConnected ? -1 : neu;
+      await new Promise((r) => setTimeout(r, 600));
       const a = document.activeElement;
       const c2 = a && a.closest ? a.closest("[data-id]") : null;
-      return { ok: true, vorher, nachher: scroller.scrollTop, id, aktiv: c2 ? c2.getAttribute("data-id") : null, knopf: a ? a.className : null, karten: document.querySelectorAll(".okit-review-card").length, ms: Math.round(performance.now() - t0) };
+      return { ok: true, vorher, nachher: scroller.scrollTop, id, aktiv: c2 ? c2.getAttribute("data-id") : null, knopf: a ? a.className : null, karten: document.querySelectorAll(".okit-review-card").length, ms: neuMs };
     `);
     if (shots) {
       const png = await capture(cdp);
@@ -447,7 +451,7 @@ async function main(): Promise<void> {
       console.log(`  Bild: ${join(shots, "review-390-nach-ablehnen.png")}`);
     }
     record("M Prüfliste mit 245 Karten: Scrollposition und Fokus bleiben nach Ablehnen einer Karte", mm.ok && mm.vorher > 500 && Math.abs(mm.nachher - mm.vorher) <= 2 && mm.aktiv === mm.id && /okit-review-reject/.test(mm.knopf ?? "") && mm.karten >= BULK_BAD,
-      `Karten=${mm.karten}, Scroll vorher ${mm.vorher} → nachher ${mm.nachher}, Karte ${q(mm.id)} → Fokus auf ${q(mm.aktiv)} (${q(mm.knopf)}), Klick bis gezeichnet ${mm.ms} ms`);
+      `Karten=${mm.karten}, Scroll vorher ${mm.vorher} → nachher ${mm.nachher}, Karte ${q(mm.id)} → Fokus auf ${q(mm.aktiv)} (${q(mm.knopf)}), Klick bis die Karte neu gebaut ist ${mm.ms} ms (Abtastung 10 ms, -1 = nicht innerhalb 5 s)`);
   } finally {
     await zustand.schliesse();
     if (istAbgebrochen()) return;
