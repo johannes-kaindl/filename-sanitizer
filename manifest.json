@@ -1,7 +1,7 @@
 {
   "id": "filename-sanitizer",
   "name": "Filename Sanitizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.15.0",
   "description": "Repairs file names that sync or links reject, keeps a log of every change, and offers writing plugins a name API.",
   "author": "Johannes Kaindl",

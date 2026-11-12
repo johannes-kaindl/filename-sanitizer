@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-11-12
+
 ### Added
 
 - The log now records *Confirmed* when you rename from the review list and *Skipped* for entries you left unticked, writes *Collision* whenever a taken name forced a number, and fills in how many links pointed at a renamed file or folder.
