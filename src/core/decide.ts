@@ -9,7 +9,8 @@ export type ReviewReason = "mode" | "link-setting" | "legacy" | "repeat";
 export type Decision =
   | { kind: "none" }
   | { kind: "exception" }
-  | { kind: "rename"; target: string; hits: FilenameHit[] }
+  /** `collisions`: so viele Namen waren schon vergeben, bevor die Nummer passte (nur gesetzt, wenn > 0). */
+  | { kind: "rename"; target: string; hits: FilenameHit[]; collisions?: number }
   | { kind: "identical"; target: string }
   | { kind: "review"; reason: ReviewReason; hits: FilenameHit[] };
 
@@ -53,7 +54,7 @@ export function decide(input: {
   for (let n = 1; n <= MAX_NUMBER; n++) {
     const target = targetFor(path, numberedName(fixed, kind, n));
     const state = input.targetState(target);
-    if (state === "free") return { kind: "rename", target, hits };
+    if (state === "free") return n > 1 ? { kind: "rename", target, hits, collisions: n - 1 } : { kind: "rename", target, hits };
     if (state === "same-content" && !isFolder) return { kind: "identical", target };
   }
   return review("repeat");

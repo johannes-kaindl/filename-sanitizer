@@ -60,6 +60,8 @@ interface RenameContext {
   stat: { ctime: number; mtime: number; size: number } | null;
   frontmatter: Record<string, unknown> | undefined;
   content: string | undefined;
+  /** Links auf den alten Pfad, vor der Umbenennung gezählt; `undefined`, wenn Obsidian keine Zahl liefert. */
+  linksChanged: number | undefined;
 }
 
 /** Repariert Namen, die fremde Schreiber anlegen: Ruhezeit, Neuprüfung, eine Umbenennung zur Zeit, nie ein Überschreiben. */
@@ -170,9 +172,18 @@ export class RepairEngine {
   }
 
   /** Benennt die angehakten Einträge der Prüfliste um; nicht genannte bleiben in der Liste. */
-  async applyReview(paths: string[]): Promise<void> {
+  async applyReview(paths: string[], skipped: readonly string[] = []): Promise<void> {
     if (!this.deps.device.repairs) return;
     const chosen = orderForRepair(paths.map((p) => this.review.get(p)).filter((e): e is ReviewEntry => e !== undefined));
+    for (const e of chosen) this.write({ event: "bestätigt", oldPath: e.path, newPath: e.target, rules: unique(e.hits.map((h) => h.rule)), trigger: "list" });
+    // „Übersprungen“ heißt: bei dieser Anwendung abgewählt und in der Liste geblieben; je Pfad einmal, auch wenn der Haken mehrmals wechselt.
+    for (const p of skipped) {
+      const e = this.review.get(p);
+      const key = `übersprungen:${p}`;
+      if (!e || paths.includes(p) || this.logged.has(key)) continue;
+      this.logged.add(key);
+      this.write({ event: "übersprungen", oldPath: e.path, newPath: e.target || undefined, rules: unique(e.hits.map((h) => h.rule)), trigger: "list" });
+    }
     for (const e of chosen) void this.run(() => this.process(e.path, "list"));
     await this.chain;
   }
@@ -361,6 +372,18 @@ export class RepairEngine {
     return parent.children.find((c) => fold(c.name) === key) ?? null;
   }
 
+  /** Wie viele Links im Vault auf den Pfad (bei einem Ordner: auf alles darunter) zeigen; Obsidian schreibt sie bei der Umbenennung um. */
+  private countLinksTo(path: string, isFolder: boolean): number | undefined {
+    const resolved = this.app.metadataCache?.resolvedLinks as Record<string, Record<string, number>> | undefined;
+    if (!resolved) return undefined;
+    const prefix = `${path}/`;
+    let total = 0;
+    for (const targets of Object.values(resolved)) {
+      for (const [to, n] of Object.entries(targets)) if (to === path || (isFolder && to.startsWith(prefix))) total += n;
+    }
+    return total;
+  }
+
   private retry(path: string, trigger: Trigger): void {
     this.triggers.set(path, trigger);
     this.queue?.touch(path);
@@ -382,6 +405,7 @@ export class RepairEngine {
     const frontmatter = !isFolder && settings.logFields.frontmatter ? this.pickFrontmatter(file, settings.logFrontmatterKeys) : undefined;
     const content = file instanceof TFile && file.extension === "md" && settings.logFields.content ? await this.readHead(file, settings.logContentChars) : undefined;
     const rules = unique(d.hits.map((h) => h.rule));
+    const linksChanged = this.countLinksTo(oldPath, isFolder);
 
     // Neuprüfung direkt vor dem Umbenennen (Spec § 6, Schritt 3): während der Lesezugriffe oben kann die Datei weggezogen sein oder das Ziel entstanden.
     if (this.app.vault.getAbstractFileByPath(oldPath) !== file) return;
@@ -408,11 +432,11 @@ export class RepairEngine {
       this.halted = true;
       this.write({ event: "fehlgeschlagen", oldPath, newPath: d.target, rules, trigger, message: `rename exceeded ${RENAME_DEADLINE_MS} ms; automatic repair paused until restart` });
       this.deps.notifyStalled?.(oldPath);
-      this.watchLateRename(done, file, d, trigger, { oldPath, rules, stat, frontmatter, content });
+      this.watchLateRename(done, file, d, trigger, { oldPath, rules, stat, frontmatter, content, linksChanged });
       return;
     }
     this.ownTargets.delete(d.target); this.ownPrefixes.delete(`${d.target}/`);
-    await this.finishRename(file, d, trigger, { oldPath, rules, stat, frontmatter, content });
+    await this.finishRename(file, d, trigger, { oldPath, rules, stat, frontmatter, content, linksChanged });
   }
 
   /**
@@ -434,7 +458,7 @@ export class RepairEngine {
   /** Alles, was nach einer gelungenen Umbenennung folgt: Alias, Sammelmeldung, Protokollzeile. */
   private async finishRename(file: TFile | TFolder, d: Extract<Decision, { kind: "rename" }>, trigger: Trigger, ctx: RenameContext, late = false): Promise<void> {
     const settings = this.deps.settings();
-    const { oldPath, rules, stat, frontmatter, content } = ctx;
+    const { oldPath, rules, stat, frontmatter, content, linksChanged } = ctx;
     this.guard.record(oldPath);
     this.dropReview(oldPath);
 
@@ -450,6 +474,8 @@ export class RepairEngine {
         });
       } catch (e) { aliasSet = false; aliasError = `alias not set: ${messageOf(e)}`; }
     }
+    // Ein vergebener Name hat die Nummer erzwungen: das gehört ins Protokoll, neben die Reparatur (Spec § 8).
+    if (d.collisions) this.write({ event: "kollision", oldPath, newPath: d.target, rules, trigger, message: `${d.collisions} name(s) already taken, numbered` });
     this.burst.push({ oldName: lastSegment(oldPath), newName: lastSegment(d.target) });
     this.scheduleFlush();
     const now = this.deps.now();
@@ -458,7 +484,7 @@ export class RepairEngine {
     this.write({
       event: "repariert", oldPath, newPath: d.target, rules, trigger,
       origin: stat ? { ctime: stat.ctime, mtime: stat.mtime, size: stat.size, secondsToRepair: Math.max(0, Math.round((now - stat.ctime) / 1000)), burstCount: this.burst.length } : undefined,
-      effect: { aliasSet }, environment, frontmatter, content,
+      effect: linksChanged === undefined ? { aliasSet } : { aliasSet, linksChanged }, environment, frontmatter, content,
       message: [late ? `confirmed after the ${RENAME_DEADLINE_MS} ms deadline` : undefined, aliasError].filter(Boolean).join("; ") || undefined,
     });
     if (file instanceof TFolder) this.touchDescendants(file);

@@ -73,7 +73,7 @@ class ReviewPanel implements HubPanel<"review"> {
       const count = gate.ok ? gate.paths.length : ticks.size;
       const btn = row.createEl("button", { cls: "mod-cta", text: count > 0 ? t("review.applyCount", count) : t("review.apply"), attr: { type: "button" } });
       btn.disabled = !gate.ok;
-      btn.addEventListener("click", () => { if (gate.ok) void this.plugin.engine.applyReview(gate.paths); });
+      btn.addEventListener("click", () => { if (gate.ok) void this.plugin.engine.applyReview(gate.paths, [...this.unticked]); });
       if (!gate.ok) row.createDiv({ cls: gate.why === "nothing" ? "fsan-note" : "fsan-warning", text: t(`review.locked.${gate.why}`) });
     }
 

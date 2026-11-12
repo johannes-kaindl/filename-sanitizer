@@ -45,6 +45,11 @@ describe("decide", () => {
     const taken = new Set(["a — b.md", "a — b 2.md"]);
     expect(run({ targetState: (t) => (taken.has(t) ? "different" : "free") })).toMatchObject({ kind: "rename", target: "a — b 3.md" });
   });
+  it("reports how many names were taken while numbering, and nothing when the first is free", () => {
+    const taken = new Set(["a — b.md", "a — b 2.md"]);
+    expect(run({ targetState: (t) => (taken.has(t) ? "different" : "free") })).toMatchObject({ target: "a — b 3.md", collisions: 2 });
+    expect(run({})).not.toHaveProperty("collisions");
+  });
   it("folder target exists numbers, never merges", () => {
     const d = run({ path: "Ord:ner", isFolder: true, targetState: (t) => (t === "Ord-ner" ? "folder-exists" : "free") });
     expect(d).toMatchObject({ kind: "rename", target: "Ord-ner 2" });

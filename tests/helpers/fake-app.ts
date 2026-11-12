@@ -43,6 +43,8 @@ export interface FakeApp {
   layoutCallbacks: (() => void)[];
   hooks: { onReadBinary?: (f: TFile) => void };
   reads: number;
+  /** `metadataCache.resolvedLinks`: Quelle → Ziel → Zahl der Links. */
+  resolvedLinks: Record<string, Record<string, number>>;
   /** Ersetzt das Umbenennen (Fehler, Hänger). */
   renameImpl: ((file: TFile | TFolder, target: string) => Promise<void>) | null;
   frontmatterImpl: ((file: TFile) => Promise<void>) | null;
@@ -70,7 +72,7 @@ export function makeFakeApp(): FakeApp {
   const emit = (name: string, ...a: unknown[]): void => { for (const h of [...(handlers.get(name) ?? [])]) h(...a); };
 
   const self: FakeApp = {
-    files, content, fm, calls, config, layoutCallbacks, hooks: {}, reads: 0, renameImpl: null, frontmatterImpl: null,
+    files, content, fm, calls, config, layoutCallbacks, hooks: {}, reads: 0, resolvedLinks: {}, renameImpl: null, frontmatterImpl: null,
     app: null as unknown as App,
     addFile(path, text = "x", stat = {}) {
       const f = new MockTFile(path); f.stat = { ctime: 0, mtime: 0, size: text.length, ...stat }; files.set(path, f); content.set(path, text);
@@ -127,7 +129,7 @@ export function makeFakeApp(): FakeApp {
         const cur = fm.get(f.path) ?? {}; fn(cur); fm.set(f.path, cur);
       },
     },
-    metadataCache: { getFileCache: (f: TFile) => (fm.has(f.path) ? { frontmatter: fm.get(f.path) } : null) },
+    metadataCache: { get resolvedLinks() { return self.resolvedLinks; }, getFileCache: (f: TFile) => (fm.has(f.path) ? { frontmatter: fm.get(f.path) } : null) },
     workspace: { onLayoutReady: (cb: () => void) => { layoutCallbacks.push(cb); } },
   };
   self.app = app as unknown as App;

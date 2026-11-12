@@ -284,6 +284,40 @@ describe("RepairEngine", () => {
     expect(t.entries().at(-1)).toMatchObject({ event: "repariert", trigger: "list" });
   });
 
+  it("applyReview logs bestätigt before repariert, and übersprungen once per skipped path", async () => {
+    const t = setup(); t.fa.addFile("a: b.md"); t.fa.addFile("c: d.md"); t.fa.addFile("e: f.md");
+    await t.boot();
+    await t.engine.applyReview(["a: b.md"], ["c: d.md", "e: f.md"]);
+    expect(t.entries().filter((e) => e.event !== "vorgemerkt").map((e) => [e.event, e.oldPath, e.trigger])).toEqual([
+      // bestätigt und übersprungen entstehen beim Klick, repariert erst, wenn die Umbenennung durch ist.
+      ["bestätigt", "a: b.md", "list"], ["übersprungen", "c: d.md", "list"], ["übersprungen", "e: f.md", "list"], ["repariert", "a: b.md", "list"],
+    ]);
+    expect(t.entries().find((e) => e.event === "bestätigt")).toMatchObject({ newPath: "a — b.md", rules: ["colon-space"] });
+    await t.engine.applyReview(["e: f.md"], ["c: d.md"]);
+    expect(t.entries().filter((e) => e.event === "übersprungen")).toHaveLength(2);
+  });
+
+  it("numbering over a taken name logs kollision next to repariert", async () => {
+    const t = setup({ snapshot: [] }); t.fa.addFile("a — b.md", "old"); await t.boot();
+    t.fa.create("a: b.md", "new"); await t.clock.advance(6000);
+    expect(t.fa.files.has("a — b 2.md")).toBe(true);
+    expect(t.entries().map((e) => [e.event, e.newPath])).toEqual([["kollision", "a — b 2.md"], ["repariert", "a — b 2.md"]]);
+    expect(t.entries()[0].message).toBe("1 name(s) already taken, numbered");
+  });
+
+  it("repariert carries linksChanged counted before the rename, folders count everything below", async () => {
+    const t = setup({ snapshot: [] }); await t.boot();
+    t.fa.resolvedLinks = { "x.md": { "a: b.md": 2 }, "y.md": { "a: b.md": 1, "z.md": 5 } };
+    t.fa.create("a: b.md"); await t.clock.advance(6000);
+    expect(t.entries().at(-1)).toMatchObject({ event: "repariert", effect: { aliasSet: true, linksChanged: 3 } });
+
+    const f = setup({ snapshot: [] }); await f.boot();
+    f.fa.addFolder("o:r"); f.fa.addFile("o:r/n.md");
+    f.fa.resolvedLinks = { "x.md": { "o:r/n.md": 4, "o:rx.md": 9 }, "o:r/n.md": { "o:r": 1 } };
+    f.fa.modify("o:r"); await f.clock.advance(6000);
+    expect(f.entries().at(0)).toMatchObject({ event: "repariert", oldPath: "o:r", effect: { linksChanged: 5 } });
+  });
+
   it("applyReview does nothing when the device does not repair", async () => {
     const t = setup({ repairs: false }); t.fa.addFile("a: b.md");
     await t.boot(); await t.engine.applyReview(["a: b.md"]);
@@ -321,7 +355,7 @@ describe("RepairEngine", () => {
     expect(t.fa.files.has("a: b.md")).toBe(true);
     expect(t.engine.pending().map((p) => [p.path, p.reason])).toEqual([["a: b.md", "repeat"]]);
     expect(t.repeats).toEqual(["a: b.md"]);
-    expect(t.entries().map((e) => e.event)).toEqual(["repariert", "repariert", "repariert", "wiederholt"]);
+    expect(t.entries().map((e) => e.event)).toEqual(["repariert", "kollision", "repariert", "kollision", "repariert", "wiederholt"]);
   });
 
   it("review mode collects everything", async () => {
@@ -385,7 +419,10 @@ describe("Gegenleser-Befunde", () => {
     await t.clock.advance(6000); await t.clock.advance(6000);
     expect(t.fa.files.has("a — b 2.md")).toBe(true);
     expect(t.fa.files.has("a: b.md")).toBe(false);
-    expect(t.entries().map((e) => e.event)).toEqual(["kollision", "repariert"]);
+    // erst der gescheiterte Versuch (Fehler „already exists“), dann die Nummerierung über den inzwischen vergebenen Namen
+    expect(t.entries().map((e) => [e.event, e.message])).toEqual([
+      ["kollision", "Destination file already exists!"], ["kollision", "1 name(s) already taken, numbered"], ["repariert", undefined],
+    ]);
   });
 
   it("failures count for the repeat guard and stop the retries", async () => {
