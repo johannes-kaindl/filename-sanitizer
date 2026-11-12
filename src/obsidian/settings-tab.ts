@@ -1,7 +1,7 @@
 import { PluginSettingTab, Setting, type App, type SettingDefinitionItem } from "obsidian";
 import type FilenameSanitizerPlugin from "../main";
-import { trySetPolicy, type PolicyField } from "../core/settings";
-import { DEFAULT_FILENAME_POLICY, type ReplaceableRule } from "../vendor/kit/filename-policy";
+import { checkNumber, trySetPolicy, type NumberKey, type PolicyField } from "../core/settings";
+import { DEFAULT_FILENAME_POLICY, checkFolderPath, type ReplaceableRule } from "../vendor/kit/filename-policy";
 import { t } from "../vendor/kit/i18n";
 import { collapsibleSection } from "../vendor/kit-obsidian/collapsible";
 import { FolderSuggest } from "../vendor/kit-obsidian/folder-suggest";
@@ -21,7 +21,6 @@ type ItemDef = { name?: string; desc?: string; visible?: () => boolean; control?
 type GroupDef = { type: "group"; heading: string; items: ItemDef[] };
 
 const RULES: readonly ReplaceableRule[] = ["colon-space", "colon", "question", "star", "quote", "lt", "gt", "backslash", "slash", "pipe", "hash", "caret", "bracket-open", "bracket-close"];
-type NumberKey = "quietMs" | "logKeepMonths" | "logContentChars";
 const LOG_GROUPS = ["origin", "effect", "environment", "frontmatter", "content"] as const;
 
 export class FilenameSanitizerSettingTab extends PluginSettingTab {
@@ -71,7 +70,11 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
       case "aliasOldName": s.aliasOldName = Boolean(value); break;
       case "mode": s.mode = value === "review" ? "review" : "auto"; break;
       case "exceptions": s.exceptions = typeof value === "string" ? value : ""; break;
-      case "logFolder": s.logFolder = typeof value === "string" && value.trim() !== "" ? value.trim() : s.logFolder; break;
+      case "logFolder": {
+        const r = checkFolderPath(typeof value === "string" ? value : "", s.policy);
+        if (!r.ok) return;
+        s.logFolder = r.folder; break;
+      }
       case "logFrontmatterKeys": s.logFrontmatterKeys = String(value).split(",").map((k) => k.trim()).filter((k) => k !== ""); break;
       default: return;
     }
@@ -82,11 +85,19 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
 
   /** Eine Zahl aus einem Textfeld; `false`, wenn sie nicht gespeichert wurde. */
   async setNumber(key: NumberKey, raw: string): Promise<boolean> {
-    const text = raw.trim();
-    if (!/^\d+$/.test(text)) return false;
-    this.plugin.settings[key] = Number(text);
+    const r = checkNumber(key, raw);
+    if (!r.ok) return false;
+    this.plugin.settings[key] = r.value;
     await this.plugin.saveSettings();
     return true;
+  }
+
+  /** Setzt den Protokollordner nur, wenn jedes Segment nach der Richtlinie ein gültiger Ordnername ist. */
+  async setLogFolder(raw: string): Promise<{ ok: true } | { ok: false; bad: string }> {
+    const r = checkFolderPath(raw, this.plugin.settings.policy);
+    if (!r.ok) return r;
+    await this.setControlValue("logFolder", r.folder);
+    return { ok: true };
   }
 
   /** Ändert ein Richtlinien-Feld nur, wenn die Richtlinie danach gültig bleibt. */
@@ -181,11 +192,20 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   private renderLog(setting: Setting): void {
     this.section(setting, t("fold.log"), (body) => {
       const s = this.plugin.settings;
-      new Setting(body).setName(t("set.logFolder")).setDesc(t("set.logFolderDesc")).addText((tx) => {
+      const folderRow = new Setting(body).setName(t("set.logFolder")).setDesc(t("set.logFolderDesc"));
+      const folderMsg = this.note(folderRow.descEl);
+      folderRow.addText((tx) => {
         tx.setValue(s.logFolder);
         tx.inputEl.setAttribute("aria-label", t("set.logFolder"));
         new FolderSuggest(this.app, tx.inputEl);
-        tx.inputEl.addEventListener("blur", () => { if (tx.getValue().trim() !== s.logFolder) void this.setControlValue("logFolder", tx.getValue()); });
+        tx.inputEl.addEventListener("blur", () => {
+          if (tx.getValue().trim() === s.logFolder) return;
+          void this.setLogFolder(tx.getValue()).then((r) => {
+            folderMsg.setText(r.ok ? "" : t("set.invalidFolder", r.bad));
+            folderMsg.toggleClass("fsan-warning", !r.ok);
+            if (!r.ok) tx.setValue(this.plugin.settings.logFolder);
+          });
+        });
       });
       new Setting(body).setName(t("set.deviceName")).setDesc(t("set.deviceNameDesc")).addText((tx) => {
         tx.setValue(this.plugin.device.name);

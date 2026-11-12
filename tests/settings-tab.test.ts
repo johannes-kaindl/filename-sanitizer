@@ -99,6 +99,23 @@ describe("settings tab", () => {
     expect(plugin.settings.quietMs).toBe(1500);
     expect(await tab.setNumber("logKeepMonths", "0")).toBe(true);
   });
+  it("numbers: 0 for quietMs and absurd values are refused and nothing is saved", async () => {
+    const { tab, plugin, saved } = makeTab();
+    const before = saved();
+    expect(await tab.setNumber("quietMs", "0")).toBe(false);
+    expect(await tab.setNumber("quietMs", "9999999999")).toBe(false);
+    expect(await tab.setNumber("logContentChars", "5000")).toBe(false);
+    expect(plugin.settings.quietMs).toBe(5000); expect(saved()).toBe(before);
+  });
+  it("log folder: an invalid name is refused with the offending segment, a valid one is saved", async () => {
+    const { tab, plugin, saved } = makeTab();
+    const before = saved();
+    expect(await tab.setLogFolder("a:b")).toEqual({ ok: false, bad: "a:b" });
+    expect(await tab.setLogFolder("")).toEqual({ ok: false, bad: "" });
+    expect(plugin.settings.logFolder).toBe("Filename Sanitizer/Log"); expect(saved()).toBe(before);
+    expect(await tab.setLogFolder("Meine Logs/fsan")).toEqual({ ok: true });
+    expect(plugin.settings.logFolder).toBe("Meine Logs/fsan"); expect(saved()).toBe(before + 1);
+  });
   it("frontmatter keys are split on commas and trimmed", async () => {
     const { tab, plugin } = makeTab();
     await tab.setControlValue("logFrontmatterKeys", " agent , model,, source ");

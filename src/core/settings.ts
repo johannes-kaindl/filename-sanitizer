@@ -1,4 +1,4 @@
-import { DEFAULT_FILENAME_POLICY, validatePolicy, type FilenamePolicy, type ReplaceableRule } from "../vendor/kit/filename-policy";
+import { DEFAULT_FILENAME_POLICY, checkFolderPath, validatePolicy, type FilenamePolicy, type ReplaceableRule } from "../vendor/kit/filename-policy";
 import { DEFAULT_QUIET_MS } from "./constants";
 
 export type RepairMode = "auto" | "review";
@@ -39,7 +39,25 @@ export const DEFAULT_SETTINGS: SanitizerSettings = {
 const isObj = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 const bool = (x: unknown, d: boolean): boolean => (typeof x === "boolean" ? x : d);
 const str = (x: unknown, d: string): string => (typeof x === "string" ? x : d);
-const natural = (x: unknown, d: number, min = 0): number => (typeof x === "number" && Number.isInteger(x) && x >= min ? x : d);
+const inRange = (x: unknown, d: number, min: number, max: number): number => (typeof x === "number" && Number.isInteger(x) && x >= min && x <= max ? x : d);
+
+/** Zulässige Bereiche der Zahlenfelder (Grenzen inklusive). Ruhezeit 0 hieße: keine Ruhezeit, und ein Sync-Schreiber würde mitten im Schreiben umbenannt. */
+export const NUMBER_LIMITS = {
+  quietMs: { min: 1, max: 600000 },
+  /** 0 = unbegrenzt. */
+  logKeepMonths: { min: 0, max: 1200 },
+  logContentChars: { min: 0, max: 2000 },
+} as const;
+export type NumberKey = keyof typeof NUMBER_LIMITS;
+
+/** Eine Zahl aus einem Textfeld: nur Ziffern, und innerhalb des Bereichs ihres Felds. */
+export function checkNumber(key: NumberKey, raw: string): { ok: true; value: number } | { ok: false } {
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return { ok: false };
+  const value = Number(text);
+  const { min, max } = NUMBER_LIMITS[key];
+  return Number.isSafeInteger(value) && value >= min && value <= max ? { ok: true, value } : { ok: false };
+}
 
 function loadPolicy(raw: unknown): FilenamePolicy {
   const r = isObj(raw) ? raw : {};
@@ -73,17 +91,19 @@ export function loadSettings(raw: unknown): SanitizerSettings {
   const r = isObj(raw) ? raw : {};
   const lf = isObj(r.logFields) ? r.logFields : {};
   const d = DEFAULT_SETTINGS;
-  const folder = typeof r.logFolder === "string" && r.logFolder.trim() !== "" ? r.logFolder.trim() : d.logFolder;
+  const policy = loadPolicy(r.policy);
+  const checked = typeof r.logFolder === "string" ? checkFolderPath(r.logFolder, policy) : null;
+  const folder = checked?.ok ? checked.folder : d.logFolder;
   const keys = Array.isArray(r.logFrontmatterKeys) && r.logFrontmatterKeys.every((k) => typeof k === "string") ? r.logFrontmatterKeys.slice() : d.logFrontmatterKeys.slice();
   return {
     mode: r.mode === "review" || r.mode === "auto" ? r.mode : d.mode,
     showNotice: bool(r.showNotice, d.showNotice),
     aliasOldName: bool(r.aliasOldName, d.aliasOldName),
     exceptions: str(r.exceptions, d.exceptions),
-    policy: loadPolicy(r.policy),
-    quietMs: natural(r.quietMs, d.quietMs),
+    policy,
+    quietMs: inRange(r.quietMs, d.quietMs, NUMBER_LIMITS.quietMs.min, NUMBER_LIMITS.quietMs.max),
     logFolder: folder,
-    logKeepMonths: natural(r.logKeepMonths, d.logKeepMonths),
+    logKeepMonths: inRange(r.logKeepMonths, d.logKeepMonths, NUMBER_LIMITS.logKeepMonths.min, NUMBER_LIMITS.logKeepMonths.max),
     logFields: {
       origin: bool(lf.origin, d.logFields.origin),
       effect: bool(lf.effect, d.logFields.effect),
@@ -92,7 +112,7 @@ export function loadSettings(raw: unknown): SanitizerSettings {
       content: bool(lf.content, d.logFields.content),
     },
     logFrontmatterKeys: keys,
-    logContentChars: natural(r.logContentChars, d.logContentChars),
+    logContentChars: inRange(r.logContentChars, d.logContentChars, NUMBER_LIMITS.logContentChars.min, NUMBER_LIMITS.logContentChars.max),
   };
 }
 

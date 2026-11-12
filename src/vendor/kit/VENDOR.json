@@ -2,8 +2,9 @@
   "source": "code-kit",
   "version": "0.63.0",
   "sha": "ce90bf0",
-  "vendored": "filename-policy.ts, ignore.ts, rotation.ts, settings.ts, i18n.ts, repeat-guard.ts, word-diff.ts",
+  "vendored": "filename-policy.ts (code-kit@0.64.0, 0c413c8), ignore.ts, rotation.ts, settings.ts, i18n.ts, repeat-guard.ts, word-diff.ts",
   "obsidian_kit_version": "0.82.0",
   "obsidian_kit_sha": "0c820ad",
-  "obsidian_kit_vendored": "vault-path.ts, filename-sanitizer-source.ts"
+  "obsidian_kit_vendored": "vault-path.ts, filename-sanitizer-source.ts",
+  "license": "AGPL-3.0-or-later"
 }

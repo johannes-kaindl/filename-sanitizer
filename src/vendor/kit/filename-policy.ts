@@ -1,4 +1,4 @@
-// vendored from code-kit@0.63.0, src/ts/pure/filename-policy.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.64.0, src/ts/pure/filename-policy.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Rules for one path segment (a file name or a folder name): which characters a name may not carry, what replaces them, and how
  *  long it may be. Obsidian-free and import-free (the module is vendored on its own).
  *
@@ -328,6 +328,29 @@ function trimEnd(stem: Unit[], hits: FilenameHit[]): Unit[] {
 /** Where `name` breaks the policy; empty when it does not. */
 export function checkSegment(name: string, policy: FilenamePolicy, kind: SegmentKind): FilenameHit[] {
   return run(name, policy, kind).hits;
+}
+
+/** A folder path from a setting (a log folder, an export folder): every segment must be a valid FOLDER name under the policy
+ *  ({@link checkSegment} with kind `"folder"` finds nothing), and the first one must not start with `.` (Obsidian neither shows nor
+ *  syncs hidden folders). `raw` is trimmed and loses the slashes at both ends; the folder comes back like that, its inner segments
+ *  untouched. Refused: an empty path, an empty segment (`a//b`), `.` and `..`, a hidden first folder, a segment the policy would
+ *  change. `bad` names what was refused: the segment, or for an empty segment the whole folder, or for an empty path the trimmed input.
+ *
+ *  The explicit refusals of the empty segment, `.`, `..` and the hidden first folder overlap with what `checkSegment` finds for kind `"folder"`
+ *  today (the `empty` and `edge` rules); they stay so the verdict and the `bad` text do not depend on how the engine words those rules.
+ *
+ *  Origin: `checkLogFolder` of the `filename-sanitizer` plugin (`src/core/settings.ts`), lifted with the policy it checks against. */
+export function checkFolderPath(raw: string, policy: FilenamePolicy): { ok: true; folder: string } | { ok: false; bad: string } {
+  const folder = raw.trim().replace(/^\/+|\/+$/g, "");
+  if (folder === "") return { ok: false, bad: raw.trim() };
+  const segments = folder.split("/");
+  const first = segments[0] ?? "";
+  if (first.startsWith(".") && first !== "." && first !== "..") return { ok: false, bad: first };
+  for (const segment of segments) {
+    const name = segment.trim();
+    if (name === "" || name === "." || name === ".." || checkSegment(name, policy, "folder").length > 0) return { ok: false, bad: name === "" ? folder : name };
+  }
+  return { ok: true, folder };
 }
 
 /** `name` brought into line with the policy. Idempotent, never empty. */

@@ -13,7 +13,10 @@
       "source": "code-kit",
       "from": "src/ts/pure",
       "modules": [
-        "filename-policy",
+        {
+          "name": "filename-policy",
+          "ref": "0.64.0"
+        },
         "ignore",
         "rotation",
         "settings",
