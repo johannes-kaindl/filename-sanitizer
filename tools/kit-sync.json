@@ -4,7 +4,7 @@
       "ref": "0.82.0"
     },
     "code-kit": {
-      "ref": "0.63.0"
+      "ref": "0.64.0"
     }
   },
   "targets": [
@@ -13,10 +13,7 @@
       "source": "code-kit",
       "from": "src/ts/pure",
       "modules": [
-        {
-          "name": "filename-policy",
-          "ref": "0.64.0"
-        },
+        "filename-policy",
         "ignore",
         "rotation",
         "settings",

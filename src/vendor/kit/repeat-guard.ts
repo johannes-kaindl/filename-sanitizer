@@ -1,4 +1,4 @@
-// vendored from code-kit@0.63.0, src/ts/pure/repeat-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.64.0, src/ts/pure/repeat-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Origin: `filename-sanitizer/src/core/repeat-guard.ts` (2026-11-09). Searched first: `naehte_suche.py` found no throttle,
 // rate-limit or window counter in code-kit or obsidian-kit; `busy-guard` is a one-at-a-time flag and `run-slot` a slot lock,
 // neither counts events over time.

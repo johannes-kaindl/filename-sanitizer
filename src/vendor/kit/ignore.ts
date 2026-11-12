@@ -1,4 +1,4 @@
-// vendored from code-kit@0.63.0, src/ts/pure/ignore.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.64.0, src/ts/pure/ignore.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ignore patterns in `.gitignore` style, applied to FOLDER paths only.
  *
  *  Lifted from `shadow-tree/src/core/ignore.ts` (shadow-tree wave 14, spec § 5); the second
@@ -94,6 +94,29 @@ export function matchIgnoreChain(rules: readonly IgnoreRule[], path: string): st
     if (hit !== null) return hit;
   }
   return null;
+}
+
+/** Whether a path is ignored when every level of it is judged on its own and a negation on a deeper level can free what a shallower
+ *  level hit: the path and each ancestor, outermost first; on one level the LAST matching rule wins (`!` frees, anything else hits);
+ *  the deepest level with a hit decides. The answer for `Archiv/keep.md` under `Archiv/` + `!Archiv/keep.md` is false, where
+ *  {@link matchIgnoreChain} keeps the hit on `Archiv` ("an earlier hit stays a hit"). Use this one when a negation is meant to carve an
+ *  exception out of an ignored folder (a gitignore without the "cannot re-include a file if its parent directory is excluded" rule);
+ *  use `matchIgnoreChain` when a hit on a folder must stay final (and when the source of the rule is wanted: this returns a boolean).
+ *
+ *  Origin: `isPathExcluded` of the `ghostline` plugin (`src/core/exclusion.ts`); the differential test in `tests/ignore-levels.test.ts`
+ *  holds this function to a verbatim copy of it on 348 (pattern set, path) pairs. The path is normalized like in `matchIgnoreChain`;
+ *  an empty path or no rules ignore nothing. The caller parses once and may cache the rules; this function holds no state. */
+export function isIgnoredByLevels(rules: readonly IgnoreRule[], path: string): boolean {
+  const segs = normalizeFolderPath(path).split("/").filter((s) => s !== "");
+  let ignored = false;
+  for (let i = 1; i <= segs.length; i++) {
+    const levelPath = segs.slice(0, i).join("/");
+    const name = segs[i - 1] ?? "";
+    let hit: IgnoreRule | null = null;
+    for (const r of rules) if (r.regex.test(r.anchored ? levelPath : name)) hit = r;
+    if (hit) ignored = !hit.negate;
+  }
+  return ignored;
 }
 
 /** One rule line (`.gitignore` style, see the header) that hits exactly this path and nothing else: rooted with a leading `/`,
