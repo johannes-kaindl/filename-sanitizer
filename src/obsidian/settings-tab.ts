@@ -6,7 +6,7 @@ import { t } from "../vendor/kit/i18n";
 import { collapsibleSection } from "../vendor/kit-obsidian/collapsible";
 import { FolderSuggest } from "../vendor/kit-obsidian/folder-suggest";
 import { githubHelpUrls, helpSettingDefinition, type HelpSettingOptions } from "../vendor/kit-obsidian/help-setting";
-import { renderSettingDefinitions, refreshSettingsTab, settingBodyHost } from "../vendor/kit-obsidian/settings_walker";
+import { settingBodyHost } from "../vendor/kit-obsidian/settings_walker";
 
 /** Doku-Index und Issues auf GitHub; `open` nur für Tests. */
 export function helpOptions(open?: (url: string) => void): HelpSettingOptions {
@@ -24,13 +24,11 @@ const RULES: readonly ReplaceableRule[] = ["colon-space", "colon", "question", "
 const LOG_GROUPS = ["origin", "effect", "environment", "frontmatter", "content"] as const;
 
 export class FilenameSanitizerSettingTab extends PluginSettingTab {
-  private cleanupPrevious: () => void = () => {};
-
   constructor(app: App, readonly plugin: FilenameSanitizerPlugin) {
     super(app, plugin);
   }
 
-  /** Deklarativ (Obsidian ≥ 1.13 rendert das selbst); darunter zeichnet `display()` dieselbe Struktur mit dem Kit-Walker nach.
+  /** Deklarativ: Obsidian rendert die Definitionen selbst.
    *  Hilfe-Zeile (UI-STANDARD §8) ist immer das ERSTE Element; Ersetzungen, Protokoll und Erweitert sind eingeklappt (Spec § 9). */
   getSettingDefinitions(): SettingDefinitionItem[] {
     const defs: (GroupDef | ReturnType<typeof helpSettingDefinition>)[] = [
@@ -112,14 +110,9 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   setDeviceRepairs(on: boolean): void { this.plugin.device.setRepairs(on); }
   setDeviceName(name: string): void { this.plugin.device.setName(name); }
 
-  private renderImperative(): void {
-    this.cleanupPrevious();
-    this.containerEl.empty();
-    this.cleanupPrevious = renderSettingDefinitions(this.containerEl, this.getSettingDefinitions(), this, this.app);
-  }
-
+  /** Baut die Definitionen neu auf (Obsidian ≥ 1.13, `minAppVersion` 1.15.0: es gibt keinen Rückfall mehr). */
   private refreshUi(): void {
-    refreshSettingsTab(this, () => { this.renderImperative(); });
+    this.update();
   }
 
   private linkAuto(): boolean {

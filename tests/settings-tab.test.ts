@@ -17,7 +17,10 @@ function makeTab(extra: Record<string, unknown> = {}) {
   const Tab = FilenameSanitizerSettingTab as unknown as new (app: App, plugin: FilenameSanitizerPlugin) => FilenameSanitizerSettingTab;
   const tab = new Tab(app, plugin);
   (tab as unknown as { containerEl: unknown }).containerEl = makeFakeEl();
-  return { tab, plugin, saved: () => saved, device };
+  // Der Kit-Mock kennt `update()` (Obsidian ≥ 1.13) nicht.
+  let updates = 0;
+  (tab as unknown as { update: () => void }).update = () => { updates++; };
+  return { tab, plugin, saved: () => saved, device, updates: () => updates };
 }
 
 describe("trySetPolicy", () => {
@@ -117,8 +120,9 @@ describe("settings tab", () => {
     expect(plugin.settings.logFolder).toBe("Meine Logs/fsan"); expect(saved()).toBe(before + 1);
   });
   it("frontmatter keys are split on commas and trimmed", async () => {
-    const { tab, plugin } = makeTab();
+    const { tab, plugin, updates } = makeTab();
     await tab.setControlValue("logFrontmatterKeys", " agent , model,, source ");
     expect(plugin.settings.logFrontmatterKeys).toEqual(["agent", "model", "source"]);
+    expect(updates()).toBe(1);
   });
 });
