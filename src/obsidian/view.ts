@@ -37,6 +37,13 @@ function reviewStrings(): ReviewListStrings {
   };
 }
 
+/** Was ein Neuzeichnen der Prüfliste nicht verlieren darf: wie weit gescrollt ist und welches Bedienelement den Fokus hat. */
+interface UiSnapshot {
+  scroll: { el: HTMLElement; top: number }[];
+  /** Karte (`data-id`) und Platz des fokussierten Elements darin; `apply` für den Knopf „Umbenennen“. */
+  focus: { card: string; index: number } | "apply" | null;
+}
+
 class ReviewPanel implements HubPanel<"review"> {
   readonly id = "review" as const;
   readonly icon = "list-checks";
@@ -44,12 +51,19 @@ class ReviewPanel implements HubPanel<"review"> {
   private unsubscribe: (() => void) | null = null;
   /** Abgewählte Pfade; alles andere in der Liste ist angehakt, auch neu Hinzukommendes. */
   private readonly unticked = new Set<string>();
+  /** Zuletzt fokussierter Platz im Panel; weg, sobald der Fokus bewusst in ein anderes Element außerhalb wandert. */
+  private lastFocus: UiSnapshot["focus"] = null;
   constructor(private readonly plugin: FilenameSanitizerPlugin) {}
 
   get label(): string { return t("tab.review"); }
 
   mount(container: HTMLElement): void {
     this.container = container;
+    container.addEventListener("focusin", (e) => { this.lastFocus = this.focusOf(container, e.target as HTMLElement); });
+    container.addEventListener("focusout", (e) => {
+      const next = e.relatedTarget as HTMLElement | null;
+      if (next && !container.contains(next)) this.lastFocus = null;
+    });
     this.unsubscribe = this.plugin.engine.onChange(() => { this.render(); });
     this.render();
   }
@@ -58,9 +72,44 @@ class ReviewPanel implements HubPanel<"review"> {
 
   destroy(): void { this.unsubscribe?.(); this.unsubscribe = null; }
 
+  /** Wo im Panel der Fokus liegt: die Karte (`data-id`) und der Platz des Elements darin, oder der Knopf „Umbenennen“. */
+  private focusOf(c: HTMLElement, el: HTMLElement | null | undefined): UiSnapshot["focus"] {
+    if (!el || !c.contains(el)) return null;
+    const card = el.closest<HTMLElement>("[data-id]");
+    if (card) return { card: card.getAttribute("data-id") ?? "", index: Array.from(card.querySelectorAll<HTMLElement>("button, [tabindex]")).indexOf(el) };
+    return el.closest(".fsan-apply") ? "apply" : null;
+  }
+
+  private snapshotUi(c: HTMLElement): UiSnapshot {
+    const scroll: UiSnapshot["scroll"] = [];
+    for (let el: HTMLElement | null = c; el; el = el.parentElement) if (el.scrollTop > 0) scroll.push({ el, top: el.scrollTop });
+    const active = c.ownerDocument?.activeElement as HTMLElement | null | undefined;
+    // Der Kit-Baustein sperrt während einer Aktion alle Knöpfe; ein gesperrter Knopf verliert den Fokus (activeElement ist dann `body`),
+    // bevor die Ansicht neu zeichnet. Dann gilt der zuletzt gemerkte Platz, solange kein anderes Element den Fokus hält.
+    const focus = this.focusOf(c, active) ?? (!active || active === c.ownerDocument?.body ? this.lastFocus : null);
+    return { scroll, focus };
+  }
+
+  private restoreUi(c: HTMLElement, snap: UiSnapshot): void {
+    if (snap.focus === "apply") c.querySelector<HTMLElement>(".fsan-apply button")?.focus({ preventScroll: true });
+    else if (snap.focus) {
+      const { card: id, index } = snap.focus;
+      const card = Array.from(c.querySelectorAll<HTMLElement>("[data-id]")).find((e) => e.getAttribute("data-id") === id);
+      const targets = card ? Array.from(card.querySelectorAll<HTMLElement>("button, [tabindex]")) : [];
+      (targets[index] ?? card)?.focus({ preventScroll: true });
+    }
+    for (const { el, top } of snap.scroll) el.scrollTop = top;
+  }
+
   private render(): void {
     const c = this.container;
     if (!c) return;
+    const snap = this.snapshotUi(c);
+    this.draw(c);
+    this.restoreUi(c, snap);
+  }
+
+  private draw(c: HTMLElement): void {
     c.empty();
     c.addClass("fsan-panel");
     const entries = this.plugin.engine.pending();

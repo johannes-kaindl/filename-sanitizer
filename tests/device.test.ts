@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Platform } from "obsidian";
 import type { App } from "obsidian";
-import { createDeviceState } from "../src/obsidian/device";
+import { createDeviceState, createFoldStorage } from "../src/obsidian/device";
 
 function fakeApp() {
   const store = new Map<string, unknown>();
@@ -36,5 +36,16 @@ describe("device state", () => {
     expect(d.hasSnapshot()).toBe(false);
     d.saveSnapshot([]); expect(d.hasSnapshot()).toBe(true); expect(d.snapshot().size).toBe(0);
     d.saveSnapshot(["a: b.md"]); expect([...d.snapshot()]).toEqual(["a: b.md"]);
+  });
+  it("fold state is stored per group on this device, and unknown groups report undefined", () => {
+    const f = fakeApp(); const fold = createFoldStorage(f.app);
+    expect(fold.getCollapsed("log")).toBeUndefined();
+    fold.setCollapsed("log", false); fold.setCollapsed("advanced", true);
+    expect(f.store.get("filename-sanitizer-fold-log")).toBe("open");
+    expect(createFoldStorage(f.app).getCollapsed("log")).toBe(false);
+    expect(createFoldStorage(f.app).getCollapsed("advanced")).toBe(true);
+    expect(fold.getCollapsed("replacements")).toBeUndefined();
+    f.store.set("filename-sanitizer-fold-log", false); // ein Boolean aus fremder Hand gilt als „nichts gespeichert“
+    expect(fold.getCollapsed("log")).toBeUndefined();
   });
 });

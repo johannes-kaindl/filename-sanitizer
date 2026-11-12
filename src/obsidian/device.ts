@@ -1,11 +1,13 @@
 import { Platform } from "obsidian";
 import type { App } from "obsidian";
 import type { DeviceState } from "./engine";
+import type { CollapsibleStorage } from "../vendor/kit-obsidian/collapsible";
 
 export const KEY_REPAIRS = "filename-sanitizer-repairs";
 export const KEY_NAME = "filename-sanitizer-name";
 export const KEY_SNAPSHOT = "filename-sanitizer-snapshot";
 export const KEY_POLICY = "filename-sanitizer-policy";
+export const KEY_FOLD = "filename-sanitizer-fold-";
 
 /** Geräteeigene Werte: nur im lokalen Speicher von Obsidian, nie in `data.json` (sie wird mitsynchronisiert). */
 export function createDeviceState(app: App, random: () => number = Math.random): DeviceState & { setRepairs(on: boolean): void; setName(name: string): void } {
@@ -34,5 +36,14 @@ export function createDeviceState(app: App, random: () => number = Math.random):
     savePolicyKey: (key) => { write(KEY_POLICY, key); },
     setRepairs: (on) => { write(KEY_REPAIRS, on); },
     setName: (name) => { write(KEY_NAME, name.trim() === "" ? null : name.trim()); },
+  };
+}
+
+/** Auf- und Zuklappzustand der Einstellungsgruppen: eine Eigenschaft dieses Geräts und dieser Ansicht, darum im lokalen Speicher und nicht in `data.json`.
+ *  Als Text gespeichert (`closed`/`open`), nicht als Boolean: ein `false` ließe sich von „nichts gespeichert“ nicht sicher unterscheiden. */
+export function createFoldStorage(app: App): CollapsibleStorage {
+  return {
+    getCollapsed: (key) => { try { const v: unknown = app.loadLocalStorage(KEY_FOLD + key); return v === "closed" ? true : v === "open" ? false : undefined; } catch { return undefined; } },
+    setCollapsed: (key, collapsed) => { try { app.saveLocalStorage(KEY_FOLD + key, collapsed ? "closed" : "open"); } catch { /* ohne Speicher gilt beim nächsten Öffnen die Vorgabe */ } },
   };
 }

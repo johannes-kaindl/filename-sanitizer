@@ -6,6 +6,7 @@ import { t } from "../vendor/kit/i18n";
 import { collapsibleSection } from "../vendor/kit-obsidian/collapsible";
 import { FolderSuggest } from "../vendor/kit-obsidian/folder-suggest";
 import { githubHelpUrls, helpSettingDefinition, type HelpSettingOptions } from "../vendor/kit-obsidian/help-setting";
+import { createFoldStorage } from "./device";
 import { settingBodyHost } from "../vendor/kit-obsidian/settings_walker";
 
 /** Doku-Index und Issues auf GitHub; `open` nur für Tests. */
@@ -149,9 +150,10 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   /** Eine eingeklappte Sektion in einem Einstellungs-Eintrag. */
-  private section(setting: Setting, title: string, build: (body: HTMLElement) => void): void {
+  /** Eingeklappt, bis jemand sie öffnet; was jemand auf- oder zugeklappt hat, bleibt über jedes Neuzeichnen und jeden Neustart. */
+  private section(setting: Setting, key: string, title: string, build: (body: HTMLElement) => void): void {
     const host = settingBodyHost(setting);
-    build(collapsibleSection(host, { title, defaultCollapsed: true }));
+    build(collapsibleSection(host, { title, defaultCollapsed: true, key, storage: createFoldStorage(this.app) }));
   }
 
   private note(parent: HTMLElement): HTMLElement {
@@ -159,7 +161,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderReplacements(setting: Setting): void {
-    this.section(setting, t("fold.replacements"), (body) => {
+    this.section(setting, "replacements", t("fold.replacements"), (body) => {
       body.createDiv({ cls: "fsan-note", text: t("set.replacementsDesc") });
       for (const rule of RULES) {
         const row = new Setting(body).setName(t(`rule.${rule}`));
@@ -183,7 +185,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderLog(setting: Setting): void {
-    this.section(setting, t("fold.log"), (body) => {
+    this.section(setting, "log", t("fold.log"), (body) => {
       const s = this.plugin.settings;
       const folderRow = new Setting(body).setName(t("set.logFolder")).setDesc(t("set.logFolderDesc"));
       const folderMsg = this.note(folderRow.descEl);
@@ -223,7 +225,7 @@ export class FilenameSanitizerSettingTab extends PluginSettingTab {
   }
 
   private renderAdvanced(setting: Setting): void {
-    this.section(setting, t("fold.advanced"), (body) => {
+    this.section(setting, "advanced", t("fold.advanced"), (body) => {
       this.numberRow(body, "quietMs", t("set.quiet"), t("set.quietDesc"));
       this.policyRow(body, "maxBytes", t("set.maxBytes"), t("set.maxBytesDesc"));
       this.policyRow(body, "extraChars", t("set.extraChars"), t("set.extraCharsDesc"));
