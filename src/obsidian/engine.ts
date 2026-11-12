@@ -1,6 +1,6 @@
 import { TFile, TFolder } from "obsidian";
 import type { App, EventRef, TAbstractFile } from "obsidian";
-import { RENAME_DEADLINE_MS, REPEAT_LIMIT, REPEAT_WINDOW_MS } from "../core/constants";
+import { OWN_TARGET_TTL_MS, RENAME_DEADLINE_MS, REPEAT_LIMIT, REPEAT_WINDOW_MS } from "../core/constants";
 import { decide, initialSnapshot, orderForRepair, targetFor, type Decision, type TargetState, type Trigger } from "../core/decide";
 import { toLogLine, summarizeBurst, type LogEvent, type LogInput } from "../core/log-entry";
 import { createQuietQueue, type Timers } from "../core/queue";
@@ -53,6 +53,15 @@ const stemOf = (name: string): string => { const i = name.lastIndexOf("."); retu
 const messageOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 const unique = <T,>(xs: T[]): T[] => [...new Set(xs)];
 
+/** Was vor der Umbenennung gelesen wurde und danach ins Protokoll gehört. */
+interface RenameContext {
+  oldPath: string;
+  rules: string[];
+  stat: { ctime: number; mtime: number; size: number } | null;
+  frontmatter: Record<string, unknown> | undefined;
+  content: string | undefined;
+}
+
 /** Repariert Namen, die fremde Schreiber anlegen: Ruhezeit, Neuprüfung, eine Umbenennung zur Zeit, nie ein Überschreiben. */
 export class RepairEngine {
   private readonly review = new Map<string, ReviewEntry>();
@@ -68,6 +77,7 @@ export class RepairEngine {
   private chain: Promise<void> = Promise.resolve();
   private burstTimer: unknown = null;
   private halted = false;
+  private readonly lateTimers = new Set<unknown>();
   private quiet = false;
   private linkNoted = false;
   private stopped = true;
@@ -91,6 +101,8 @@ export class RepairEngine {
     this.queue = null;
     if (this.burstTimer !== null) { this.deps.timers.clearTimeout(this.burstTimer); this.burstTimer = null; }
     this.flushBurst();
+    for (const h of this.lateTimers) this.deps.timers.clearTimeout(h);
+    this.lateTimers.clear();
     for (const r of this.refs) this.app.vault.offref(r);
     this.refs = [];
   }
@@ -354,12 +366,12 @@ export class RepairEngine {
     this.queue?.touch(path);
   }
 
-  private async renameWithDeadline(file: TFile | TFolder, target: string): Promise<"ok" | "timeout"> {
+  private async renameWithDeadline(file: TFile | TFolder, target: string): Promise<{ outcome: "ok" | "timeout"; done: Promise<void> }> {
     let handle: unknown;
     const timeout = new Promise<"timeout">((resolve) => { handle = this.deps.timers.setTimeout(() => { resolve("timeout"); }, RENAME_DEADLINE_MS); });
-    const done = Promise.resolve(this.app.fileManager.renameFile(file, target)).then(() => "ok" as const);
+    const done = Promise.resolve(this.app.fileManager.renameFile(file, target)).then(() => undefined);
     done.catch(() => undefined);
-    try { return await Promise.race([done, timeout]); } finally { this.deps.timers.clearTimeout(handle); }
+    try { const outcome = await Promise.race([done.then(() => "ok" as const), timeout]); return { outcome, done }; } finally { this.deps.timers.clearTimeout(handle); }
   }
 
   private async doRename(file: TFile | TFolder, d: Extract<Decision, { kind: "rename" }>, trigger: Trigger): Promise<void> {
@@ -377,9 +389,9 @@ export class RepairEngine {
 
     this.ownTargets.add(d.target);
     if (isFolder) this.ownPrefixes.add(`${d.target}/`);
-    let outcome: "ok" | "timeout";
+    let outcome: "ok" | "timeout"; let done: Promise<void>;
     try {
-      outcome = await this.renameWithDeadline(file, d.target);
+      ({ outcome, done } = await this.renameWithDeadline(file, d.target));
     } catch (e) {
       this.ownTargets.delete(d.target); this.ownPrefixes.delete(`${d.target}/`);
       const collision = /already exists/i.test(messageOf(e));
@@ -396,9 +408,33 @@ export class RepairEngine {
       this.halted = true;
       this.write({ event: "fehlgeschlagen", oldPath, newPath: d.target, rules, trigger, message: `rename exceeded ${RENAME_DEADLINE_MS} ms; automatic repair paused until restart` });
       this.deps.notifyStalled?.(oldPath);
+      this.watchLateRename(done, file, d, trigger, { oldPath, rules, stat, frontmatter, content });
       return;
     }
     this.ownTargets.delete(d.target); this.ownPrefixes.delete(`${d.target}/`);
+    await this.finishRename(file, d, trigger, { oldPath, rules, stat, frontmatter, content });
+  }
+
+  /**
+   * Nach dem Fristablauf wartet der Dialog „Update links“ womöglich noch. Wird er später bestätigt, ist die Datei umbenannt:
+   * das gehört ins Protokoll, und der eigene Zielpfad ist danach nichts Besonderes mehr. Bleibt der Dialog stehen,
+   * räumt die Zeitgrenze den Zielpfad.
+   */
+  private watchLateRename(done: Promise<void>, file: TFile | TFolder, d: Extract<Decision, { kind: "rename" }>, trigger: Trigger, ctx: RenameContext): void {
+    const release = (): void => { this.ownTargets.delete(d.target); this.ownPrefixes.delete(`${d.target}/`); };
+    const handle = this.deps.timers.setTimeout(() => { this.lateTimers.delete(handle); release(); }, OWN_TARGET_TTL_MS);
+    this.lateTimers.add(handle);
+    const settle = (): void => { this.deps.timers.clearTimeout(handle); this.lateTimers.delete(handle); release(); };
+    done.then(
+      () => { settle(); return this.run(() => this.finishRename(file, d, trigger, ctx, true)); },
+      () => { settle(); },
+    ).catch(() => undefined);
+  }
+
+  /** Alles, was nach einer gelungenen Umbenennung folgt: Alias, Sammelmeldung, Protokollzeile. */
+  private async finishRename(file: TFile | TFolder, d: Extract<Decision, { kind: "rename" }>, trigger: Trigger, ctx: RenameContext, late = false): Promise<void> {
+    const settings = this.deps.settings();
+    const { oldPath, rules, stat, frontmatter, content } = ctx;
     this.guard.record(oldPath);
     this.dropReview(oldPath);
 
@@ -422,7 +458,8 @@ export class RepairEngine {
     this.write({
       event: "repariert", oldPath, newPath: d.target, rules, trigger,
       origin: stat ? { ctime: stat.ctime, mtime: stat.mtime, size: stat.size, secondsToRepair: Math.max(0, Math.round((now - stat.ctime) / 1000)), burstCount: this.burst.length } : undefined,
-      effect: { aliasSet }, environment, frontmatter, content, message: aliasError,
+      effect: { aliasSet }, environment, frontmatter, content,
+      message: [late ? `confirmed after the ${RENAME_DEADLINE_MS} ms deadline` : undefined, aliasError].filter(Boolean).join("; ") || undefined,
     });
     if (file instanceof TFolder) this.touchDescendants(file);
   }

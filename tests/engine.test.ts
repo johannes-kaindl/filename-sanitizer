@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TFile } from "obsidian";
 import { RepairEngine, type DeviceState, type LogStore } from "../src/obsidian/engine";
+import { OWN_TARGET_TTL_MS } from "../src/core/constants";
 import { loadSettings, type SanitizerSettings } from "../src/core/settings";
 import { parseLogLine, type LogInput } from "../src/core/log-entry";
 import { fakeClock, flush, makeFakeApp } from "./helpers/fake-app";
@@ -98,6 +99,50 @@ describe("RepairEngine", () => {
     t.engine.stop(); t.fa.renameImpl = null; await t.boot();
     t.fa.create("g: h.md"); await t.clock.advance(6000);
     expect(t.fa.files.has("g — h.md")).toBe(true);
+  });
+
+  describe("late confirmation after the deadline", () => {
+    const own = (t: ReturnType<typeof setup>): string[] => [...(t.engine as unknown as { ownTargets: Set<string> }).ownTargets];
+
+    it("is logged as repariert and releases the own target", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      let confirm: () => void = () => undefined;
+      t.fa.renameImpl = (f, target) => new Promise<void>((resolve) => {
+        confirm = () => { t.fa.files.delete(f.path); f.path = target; t.fa.files.set(target, f); resolve(); };
+      });
+      t.fa.create("a: b.md");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+      expect(own(t)).toEqual(["a — b.md"]);
+      confirm(); await flush();
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen", "repariert"]);
+      expect(t.entries()[1]).toMatchObject({ oldPath: "a: b.md", newPath: "a — b.md", effect: { aliasSet: true } });
+      expect(t.entries()[1].message).toContain("after the 10000 ms deadline");
+      expect(own(t)).toEqual([]);
+      expect(t.fa.fm.get("a — b.md")).toEqual({ aliases: ["a: b"] });
+    });
+
+    it("releases the own target after the time limit when the dialog stays open", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      t.fa.renameImpl = () => new Promise<void>(() => undefined);
+      t.fa.create("a: b.md");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      expect(own(t)).toEqual(["a — b.md"]);
+      await t.clock.advance(OWN_TARGET_TTL_MS - 1); expect(own(t)).toEqual(["a — b.md"]);
+      await t.clock.advance(1); expect(own(t)).toEqual([]);
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+    });
+
+    it("a rejected late rename logs nothing more and releases the target", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      let fail: (e: Error) => void = () => undefined;
+      t.fa.renameImpl = () => new Promise<void>((_, reject) => { fail = reject; });
+      t.fa.create("a: b.md");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      fail(new Error("cancelled")); await flush();
+      expect(own(t)).toEqual([]);
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+    });
   });
 
   it("own rename event is ignored", async () => {
