@@ -55,6 +55,12 @@ export interface FakeApp {
   modify(path: string): void;
   remove(path: string): void;
   renameExternal(path: string, target: string): void;
+  /**
+   * Das nächste `renameFile` hängt wie der Dialog „Update links“. `confirm()` führt die Umbenennung dann erst aus, gegen den Stand
+   * zum Zeitpunkt der Bestätigung: ein inzwischen belegtes Ziel wirft „Destination file already exists!“, eine weggezogene
+   * oder gelöschte Datei wirft, eine von außen umbenannte Datei zieht von ihrem jetzigen Pfad aufs Ziel.
+   */
+  holdRename(): { confirm(): Promise<void> };
   fireLayoutReady(): void;
   listenerCount(): number;
 }
@@ -89,6 +95,21 @@ export function makeFakeApp(): FakeApp {
     modify(path) { const f = files.get(path); if (f) emit("modify", f); },
     remove(path) { const f = files.get(path); if (!f) return; files.delete(path); content.delete(path); const p = f.parent as TFolder | null; if (p) p.children = p.children.filter((c: unknown) => c !== f); emit("delete", f); },
     renameExternal(path, target) { void move(files.get(path)!, target); },
+    holdRename() {
+      let confirmFn: () => Promise<void> = () => Promise.reject(new Error("holdRename: renameFile was never called"));
+      self.renameImpl = (f, target) => {
+        self.renameImpl = null;
+        return new Promise<void>((resolve, reject) => {
+          confirmFn = async () => {
+            try {
+              if (files.get(f.path) !== f) throw new Error("ENOENT: no such file or directory");
+              await move(f, target); resolve();
+            } catch (e) { reject(e as Error); }
+          };
+        });
+      };
+      return { confirm: () => confirmFn() };
+    },
     fireLayoutReady() { for (const cb of layoutCallbacks.splice(0)) cb(); },
     listenerCount() { let n = 0; for (const s of handlers.values()) n += s.size; return n; },
   };

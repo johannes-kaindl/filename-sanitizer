@@ -145,6 +145,86 @@ describe("RepairEngine", () => {
     });
   });
 
+  describe("sync races while a rename hangs on the link dialog", () => {
+    const own = (t: ReturnType<typeof setup>): string[] => [...(t.engine as unknown as { ownTargets: Set<string> }).ownTargets];
+
+    it("target taken from outside, confirmed within the deadline: collision logged, the other file untouched, retried with a number", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000);
+      t.fa.addFile("a — b.md", "other");
+      await hold.confirm(); await flush();
+      await t.clock.advance(6000); await t.clock.advance(6000);
+      expect(t.fa.content.get("a — b.md")).toBe("other");
+      expect(t.fa.content.get("a — b 2.md")).toBe("mine");
+      expect(t.fa.files.has("a: b.md")).toBe(false);
+      expect(t.entries().map((e) => [e.event, e.newPath, e.message])).toEqual([
+        ["kollision", "a — b.md", "Destination file already exists!"], ["kollision", "a — b 2.md", "1 name(s) already taken, numbered"], ["repariert", "a — b 2.md", undefined],
+      ]);
+      expect(own(t)).toEqual([]);
+    });
+
+    it("target taken from outside, rejected after the deadline: nothing overwritten, the own target released, the file stays unlisted (open gap)", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      t.fa.addFile("a — b.md", "other");
+      await hold.confirm(); await flush();
+      await t.clock.advance(20000);
+      expect(t.fa.content.get("a — b.md")).toBe("other");
+      expect(t.fa.files.has("a: b.md")).toBe(true);
+      expect(own(t)).toEqual([]);
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+      // Lücke, siehe Task: die späte Ablehnung wird weder protokolliert noch taucht die Datei in der Prüfliste auf.
+      expect(t.engine.pending()).toEqual([]);
+    });
+
+    it("file renamed from outside, confirmed within the deadline: the rename lands on the own target and the stale queue entry is dropped", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000);
+      t.fa.renameExternal("a: b.md", "c: d.md"); await flush();
+      await hold.confirm(); await flush();
+      await t.clock.advance(20000);
+      expect([...t.fa.files.keys()]).toEqual(["a — b.md"]);
+      expect(t.entries().map((e) => [e.event, e.oldPath, e.newPath])).toEqual([["repariert", "a: b.md", "a — b.md"]]);
+      expect(t.renames()).toEqual(["rename a: b.md -> a — b.md"]);
+      expect(t.engine.pending()).toEqual([]); expect(own(t)).toEqual([]);
+    });
+
+    it("file renamed from outside, confirmed after the deadline: late repariert, no second rename of the vanished name", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      t.fa.renameExternal("a: b.md", "c: d.md"); await flush();
+      await t.clock.advance(10000);
+      await hold.confirm(); await flush();
+      await t.clock.advance(20000);
+      expect([...t.fa.files.keys()]).toEqual(["a — b.md"]);
+      expect(t.entries().map((e) => [e.event, e.message])).toEqual([
+        ["fehlgeschlagen", "rename exceeded 10000 ms; automatic repair paused until restart"], ["repariert", "confirmed after the 10000 ms deadline"],
+      ]);
+      expect(t.renames()).toHaveLength(1);
+      expect(t.engine.pending()).toEqual([]); expect(own(t)).toEqual([]);
+    });
+
+    it("the fake itself: a file that vanished during the hang makes the confirmation fail", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000);
+      t.fa.remove("a: b.md"); await flush();
+      await hold.confirm(); await flush();
+      expect(t.fa.files.size).toBe(0);
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+      expect(t.entries()[0].message).toContain("ENOENT");
+    });
+  });
+
   it("own rename event is ignored", async () => {
     const t = setup({ snapshot: [] }); await t.boot();
     t.fa.create("a: b.md"); await t.clock.advance(10000);
