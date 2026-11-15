@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-11-15
+
 ### Changed
 
 - The strikethrough and underline colours of the name comparison in the review list are mixed a little further towards the text colour so they keep their contrast on the editor background.
