@@ -451,8 +451,19 @@ export class RepairEngine {
     const settle = (): void => { this.deps.timers.clearTimeout(handle); this.lateTimers.delete(handle); release(); };
     done.then(
       () => { settle(); return this.run(() => this.finishRename(file, d, trigger, ctx, true)); },
-      () => { settle(); },
+      (e: unknown) => { settle(); return this.run(() => { this.rejectedLate(file, d, trigger, ctx, e); return Promise.resolve(); }); },
     ).catch(() => undefined);
+  }
+
+  /**
+   * Die hängende Umbenennung wurde nach dem Fristablauf abgelehnt (Ziel inzwischen von außen belegt, Abbruch): die Ablehnung gehört ins Protokoll,
+   * und die Datei, die noch unter ihrem falschen Namen liegt, steht in der Prüfliste (Grund `stalled`), statt unsichtbar zu bleiben.
+   * Ist sie inzwischen weggezogen, bleibt es beim Protokoll.
+   */
+  private rejectedLate(file: TFile | TFolder, d: Extract<Decision, { kind: "rename" }>, trigger: Trigger, ctx: RenameContext, error: unknown): void {
+    const collision = /already exists/i.test(messageOf(error));
+    this.write({ event: collision ? "kollision" : "fehlgeschlagen", oldPath: ctx.oldPath, newPath: d.target, rules: ctx.rules, trigger, message: `rejected after the ${RENAME_DEADLINE_MS} ms deadline: ${messageOf(error)}` });
+    if (this.app.vault.getAbstractFileByPath(ctx.oldPath) === file) this.setReview(ctx.oldPath, file instanceof TFolder, "stalled", d.hits, d.target);
   }
 
   /** Alles, was nach einer gelungenen Umbenennung folgt: Alias, Sammelmeldung, Protokollzeile. */

@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A rename that was rejected only after the 10-second limit (the target name got taken meanwhile, or the *Update links* dialog was cancelled) is now written to the log, and the file appears in the review list as *stalled* instead of staying unnoticed until the next start.
+
 ## [0.1.1] — 2026-11-12
 
 ### Added

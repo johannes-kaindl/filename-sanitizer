@@ -133,7 +133,7 @@ describe("RepairEngine", () => {
       expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
     });
 
-    it("a rejected late rename logs nothing more and releases the target", async () => {
+    it("a rejected late rename (dialog cancelled) releases the target, logs the rejection and lists the file as stalled", async () => {
       const t = setup({ snapshot: [] }); await t.boot();
       let fail: (e: Error) => void = () => undefined;
       t.fa.renameImpl = () => new Promise<void>((_, reject) => { fail = reject; });
@@ -141,7 +141,11 @@ describe("RepairEngine", () => {
       await t.clock.advance(5000); await t.clock.advance(10000);
       fail(new Error("cancelled")); await flush();
       expect(own(t)).toEqual([]);
-      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
+      expect(t.entries().map((e) => [e.event, e.message])).toEqual([
+        ["fehlgeschlagen", "rename exceeded 10000 ms; automatic repair paused until restart"],
+        ["fehlgeschlagen", "rejected after the 10000 ms deadline: cancelled"],
+      ]);
+      expect(t.engine.pending().map((e) => [e.path, e.reason])).toEqual([["a: b.md", "stalled"]]);
     });
   });
 
@@ -165,7 +169,7 @@ describe("RepairEngine", () => {
       expect(own(t)).toEqual([]);
     });
 
-    it("target taken from outside, rejected after the deadline: nothing overwritten, the own target released, the file stays unlisted (open gap)", async () => {
+    it("target taken from outside, rejected after the deadline: nothing overwritten, the own target released, the rejection logged and the file listed as stalled", async () => {
       const t = setup({ snapshot: [] }); await t.boot();
       const hold = t.fa.holdRename();
       t.fa.create("a: b.md", "mine");
@@ -176,9 +180,23 @@ describe("RepairEngine", () => {
       expect(t.fa.content.get("a — b.md")).toBe("other");
       expect(t.fa.files.has("a: b.md")).toBe(true);
       expect(own(t)).toEqual([]);
-      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen"]);
-      // Lücke, siehe Task: die späte Ablehnung wird weder protokolliert noch taucht die Datei in der Prüfliste auf.
-      expect(t.engine.pending()).toEqual([]);
+      expect(t.entries().map((e) => [e.event, e.oldPath, e.newPath])).toEqual([
+        ["fehlgeschlagen", "a: b.md", "a — b.md"], ["kollision", "a: b.md", "a — b.md"],
+      ]);
+      expect(t.entries()[1]?.message).toMatch(/^rejected after the 10000 ms deadline: .*already exists/i);
+      expect(t.engine.pending().map((e) => [e.path, e.reason, e.target])).toEqual([["a: b.md", "stalled", "a — b.md"]]);
+    });
+
+    it("rejected after the deadline while the file moved away meanwhile: logged, nothing listed under the old path", async () => {
+      const t = setup({ snapshot: [] }); await t.boot();
+      const hold = t.fa.holdRename();
+      t.fa.create("a: b.md", "mine");
+      await t.clock.advance(5000); await t.clock.advance(10000);
+      t.fa.addFile("a — b.md", "other");
+      t.fa.renameExternal("a: b.md", "c: d.md"); await flush();
+      await hold.confirm(); await flush();
+      expect(t.entries().map((e) => e.event)).toEqual(["fehlgeschlagen", "kollision"]);
+      expect(t.engine.pending().map((e) => e.path)).not.toContain("a: b.md");
     });
 
     it("file renamed from outside, confirmed within the deadline: the rename lands on the own target and the stale queue entry is dropped", async () => {
