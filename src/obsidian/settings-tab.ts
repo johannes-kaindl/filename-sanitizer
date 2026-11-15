@@ -7,7 +7,7 @@ import { collapsibleSection } from "../vendor/kit-obsidian/collapsible";
 import { FolderSuggest } from "../vendor/kit-obsidian/folder-suggest";
 import { githubHelpUrls, helpSettingDefinition, type HelpSettingOptions } from "../vendor/kit-obsidian/help-setting";
 import { createFoldStorage } from "./device";
-import { settingBodyHost } from "../vendor/kit-obsidian/settings_walker";
+import { settingBodyHost } from "../vendor/kit-obsidian/setting-body-host";
 
 /** Doku-Index und Issues auf GitHub; `open` nur für Tests. */
 export function helpOptions(open?: (url: string) => void): HelpSettingOptions {

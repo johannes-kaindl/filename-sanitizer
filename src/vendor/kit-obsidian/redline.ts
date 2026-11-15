@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.82.0, src/obsidian/redline.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.92.0, src/obsidian/redline.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Redline (Diff-Ansicht auf Wortebene): ein Text mit durchgestrichener Löschung und unterstrichener Einfügung in EINER Spalte, damit es
  * auf dem iPhone trägt. Gebaut für Diachronic (Prüfkarten und Vergleichsansicht), containerunabhängig: der Baustein füllt einen
@@ -90,11 +90,11 @@ export const REDLINE_CSS = `
   color: var(--color-blue);
 }
 
-/* Kontrast 4,5 zu 1: die rohen Akzentfarben der Themes unterschreiten ihn (Orange hell, Blau dunkel, beide in Kuro hell); gegen den Text gemischt halten sie ihn in Standard, Field Report und Kuro. */
+/* Kontrast 4,5 zu 1: die rohen Akzentfarben der Themes unterschreiten ihn (Orange hell, Blau dunkel, beide in Kuro hell); gegen den Text gemischt halten sie ihn in Standard, Field Report und Kuro, auf dem Grund des Editors und auf dem der Seitenleiste (dunkel Standard: Einfügung 75 Prozent, gemessen 2026-11-12 mit 4,41 bei 80). */
 .theme-light .okit-redline-del { color: color-mix(in srgb, var(--color-orange) 60%, var(--text-normal)); }
 .theme-light .okit-redline-ins { color: color-mix(in srgb, var(--color-blue) 60%, var(--text-normal)); }
 .theme-dark .okit-redline-del { color: color-mix(in srgb, var(--color-orange) 80%, var(--text-normal)); }
-.theme-dark .okit-redline-ins { color: color-mix(in srgb, var(--color-blue) 80%, var(--text-normal)); }
+.theme-dark .okit-redline-ins { color: color-mix(in srgb, var(--color-blue) 75%, var(--text-normal)); }
 
 .okit-redline-del[data-author="0"],
 .okit-redline-ins[data-author="0"] { color: var(--color-blue); }
@@ -108,4 +108,15 @@ export const REDLINE_CSS = `
 .okit-redline-ins[data-author="4"] { color: var(--color-yellow); }
 .okit-redline-del[data-author="5"],
 .okit-redline-ins[data-author="5"] { color: var(--color-pink); }
+
+/* Autorenplätze gegen den Text gemischt, je Modus (Spezifität größer als die Moduszeilen oben, die Reihenfolge ist egal). Hell brauchen alle sechs Plätze den Anteil, dunkel nur Blau und Pink.
+   Je größer der Anteil Text, desto näher rücken die Plätze zusammen: Kontrast und Unterscheidbarkeit gehen hier gegeneinander, die gemessenen Abstände stehen im CHANGELOG. */
+.theme-light .okit-redline-del[data-author="0"], .theme-light .okit-redline-ins[data-author="0"] { color: color-mix(in srgb, var(--color-blue) 60%, var(--text-normal)); }
+.theme-light .okit-redline-del[data-author="1"], .theme-light .okit-redline-ins[data-author="1"] { color: color-mix(in srgb, var(--color-orange) 60%, var(--text-normal)); }
+.theme-light .okit-redline-del[data-author="2"], .theme-light .okit-redline-ins[data-author="2"] { color: color-mix(in srgb, var(--color-purple) 60%, var(--text-normal)); }
+.theme-light .okit-redline-del[data-author="3"], .theme-light .okit-redline-ins[data-author="3"] { color: color-mix(in srgb, var(--color-cyan) 45%, var(--text-normal)); }
+.theme-light .okit-redline-del[data-author="4"], .theme-light .okit-redline-ins[data-author="4"] { color: color-mix(in srgb, var(--color-yellow) 40%, var(--text-normal)); }
+.theme-light .okit-redline-del[data-author="5"], .theme-light .okit-redline-ins[data-author="5"] { color: color-mix(in srgb, var(--color-pink) 50%, var(--text-normal)); }
+.theme-dark .okit-redline-del[data-author="0"], .theme-dark .okit-redline-ins[data-author="0"] { color: color-mix(in srgb, var(--color-blue) 75%, var(--text-normal)); }
+.theme-dark .okit-redline-del[data-author="5"], .theme-dark .okit-redline-ins[data-author="5"] { color: color-mix(in srgb, var(--color-pink) 90%, var(--text-normal)); }
 `;

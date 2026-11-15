@@ -1,10 +1,10 @@
 {
   "source": "code-kit",
-  "version": "0.64.0",
-  "sha": "0c413c8",
+  "version": "0.73.0",
+  "sha": "09b7dcb",
   "vendored": "filename-policy.ts, ignore.ts, rotation.ts, settings.ts, i18n.ts, repeat-guard.ts, word-diff.ts",
-  "obsidian_kit_version": "0.82.0",
-  "obsidian_kit_sha": "0c820ad",
+  "obsidian_kit_version": "0.92.0",
+  "obsidian_kit_sha": "be4994f",
   "obsidian_kit_vendored": "vault-path.ts, filename-sanitizer-source.ts",
   "license": "AGPL-3.0-or-later"
 }

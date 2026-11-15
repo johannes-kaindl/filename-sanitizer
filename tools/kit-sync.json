@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.82.0"
+      "ref": "0.92.0"
     },
     "code-kit": {
-      "ref": "0.64.0"
+      "ref": "0.73.0"
     }
   },
   "targets": [
@@ -57,7 +57,7 @@
         "confirm",
         "plugin-api",
         "safe-file-name",
-        "settings_walker",
+        "setting-body-host",
         "folder-suggest"
       ],
       "rewrite": [
@@ -76,6 +76,7 @@
       "source": "obsidian-kit",
       "from": "src/testing",
       "modules": [
+        "kit-css",
         "obsidian-mock"
       ]
     }

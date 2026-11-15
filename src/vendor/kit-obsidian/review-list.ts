@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.82.0, src/obsidian/review-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.92.0, src/obsidian/review-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Prüfliste: Karten für Änderungen und Kommentare mit Annehmen, Ablehnen, Kommentar, Antworten und Erledigt — der Prüfen-Tab von
  * Diachronic, aber ohne Wissen über CriticMarkup, Notizen oder Editor. Der Baustein bekommt fertige Einträge und meldet Aktionen.

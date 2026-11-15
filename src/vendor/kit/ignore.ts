@@ -1,4 +1,4 @@
-// vendored from code-kit@0.64.0, src/ts/pure/ignore.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.73.0, src/ts/pure/ignore.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ignore patterns in `.gitignore` style, applied to FOLDER paths only.
  *
  *  Lifted from `shadow-tree/src/core/ignore.ts` (shadow-tree wave 14, spec § 5); the second
@@ -70,6 +70,7 @@ export function parsePatterns(text: string): ParsedPatterns {
 export function matchIgnore(rules: readonly IgnoreRule[], folderPath: string): string | null {
   const path = normalizeFolderPath(folderPath);
   if (path === "") return null;
+  // the same expression as `baseName` (rel-path.ts) on purpose, held equal by the differential test in tests/rel-path.test.ts: this module imports nothing and is vendored on its own (five consumers, measured 2026-11-14 from the vendor headers), and an import of `baseName` would pull rel-path.ts into every one of those vendorings.
   const name = path.slice(path.lastIndexOf("/") + 1);
   let hit: string | null = null;
   for (const r of rules) {

@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The strikethrough and underline colours of the name comparison in the review list are mixed a little further towards the text colour so they keep their contrast on the editor background.
+
 ### Fixed
 
 - A rename that was rejected only after the 10-second limit (the target name got taken meanwhile, or the *Update links* dialog was cancelled) is now written to the log, and the file appears in the review list as *stalled* instead of staying unnoticed until the next start.
